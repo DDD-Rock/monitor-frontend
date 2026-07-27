@@ -15,7 +15,6 @@ const error = ref('')
 const copied = ref(false)
 const barkSettings = ref<BarkSettings | null>(null)
 const barkDeviceKey = ref('')
-const barkEnabled = ref(false)
 const barkBusy = ref(false)
 const barkMessage = ref('')
 const barkError = ref('')
@@ -32,7 +31,6 @@ onMounted(async () => {
     ])
     current.value = sessionResponse.session
     barkSettings.value = notificationResponse
-    barkEnabled.value = notificationResponse.expMinuteEnabled
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '无法读取监控会话'
   }
@@ -64,7 +62,6 @@ async function saveBark() {
       method: 'PUT',
       body: JSON.stringify({
         deviceKey: barkDeviceKey.value,
-        expMinuteEnabled: barkEnabled.value,
       }),
     })
     barkDeviceKey.value = ''
@@ -166,10 +163,7 @@ function logout() {
           <input v-model.trim="barkDeviceKey" maxlength="128" :placeholder="barkSettings?.configured ? '已安全保存；重新填写可替换' : '请输入 Bark 生成的 DeviceKey'" />
         </label>
         <p class="device-key-hint">填写 Bark 首页“推送地址”的最后一段，不要填写 64 位 APNs DeviceToken。</p>
-        <label class="checkbox-row">
-          <input v-model="barkEnabled" type="checkbox" />
-          每分钟推送当前经验值和百分比
-        </label>
+        <p class="device-key-hint">保存后，在预览页按需开启各类推送规则。</p>
         <p v-if="barkError" class="form-error">{{ barkError }}</p>
         <p v-if="barkMessage" class="form-success">{{ barkMessage }}</p>
         <div class="button-row">

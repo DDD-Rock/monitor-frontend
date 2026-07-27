@@ -1,11 +1,27 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { FramePayload, MapPayload, Point } from '../types/protocol'
+import type { FramePayload, MapPayload, Point, ZoneRect } from '../types/protocol'
 
-const props = defineProps<{ map: MapPayload | null; frame: FramePayload | null }>()
+const props = defineProps<{
+  map: MapPayload | null
+  frame: FramePayload | null
+  safeZone?: ZoneRect | null
+  safeZoneBreached?: boolean
+}>()
 const viewWidth = 1200
 const viewHeight = computed(() => Math.round(viewWidth / (props.map?.aspectRatio || 16 / 9)))
 const point = (value: Point) => `${value.x * viewWidth},${value.y * viewHeight.value}`
+// 安全区矩形是归一化的，按当前画布尺寸放大即可。
+const safeZoneBox = computed(() => {
+  const rect = props.safeZone
+  if (!rect) return null
+  return {
+    x: rect.x * viewWidth,
+    y: rect.y * viewHeight.value,
+    width: rect.width * viewWidth,
+    height: rect.height * viewHeight.value,
+  }
+})
 </script>
 
 <template>
@@ -22,6 +38,17 @@ const point = (value: Point) => `${value.x * viewWidth},${value.y * viewHeight.v
       <line v-for="n in 9" :key="`v${n}`" :x1="n * viewWidth / 10" y1="0" :x2="n * viewWidth / 10" :y2="viewHeight" />
       <line v-for="n in 5" :key="`h${n}`" x1="0" :y1="n * viewHeight / 6" :x2="viewWidth" :y2="n * viewHeight / 6" />
     </g>
+
+    <rect
+      v-if="safeZoneBox"
+      class="safe-zone-box"
+      :class="{ breached: safeZoneBreached }"
+      :x="safeZoneBox.x"
+      :y="safeZoneBox.y"
+      :width="safeZoneBox.width"
+      :height="safeZoneBox.height"
+      rx="6"
+    />
 
     <g v-if="map">
       <g v-for="(platform, index) in map.platforms" :key="platform.id">

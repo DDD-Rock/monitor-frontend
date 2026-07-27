@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { apiRequest } from '../api/client'
 import AnnotationStage from '../components/AnnotationStage.vue'
 import type { BarkSettings } from '../types/api'
-import type { Envelope, EXPPayload, FramePayload, MapPayload, RunePayload, Snapshot, StatusPayload } from '../types/protocol'
+import type { Envelope, EXPPayload, FramePayload, MapPayload, RunePayload, Snapshot, StatusPayload, ZonePayload } from '../types/protocol'
 
 const route = useRoute()
 const token = String(route.params.token || '')
@@ -14,6 +14,7 @@ const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
 const rune = ref<RunePayload | null>(null)
+const zone = ref<ZonePayload | null>(null)
 const online = ref(false)
 const status = ref('正在连接监控服务…')
 const connected = ref(false)
@@ -56,6 +57,20 @@ const runeConfidenceText = computed(() =>
     ? `${Math.round(rune.value.confidence * 100)}%`
     : '--',
 )
+// rect 为空表示本机没有配置安全区，此时既不画框也不报警。
+const zoneRect = computed(() => zone.value?.rect ?? null)
+const zoneConfigured = computed(() => zoneRect.value !== null)
+const zoneOutside = computed(() => online.value && zone.value?.outside === true)
+const zoneStatusText = computed(() => {
+  if (!zoneConfigured.value) return '本机未设置安全区'
+  if (!online.value) return '等待本机上线'
+  return zoneOutside.value ? '角色已离开安全区' : '角色在安全区内'
+})
+const zoneSizeText = computed(() => {
+  const rect = zoneRect.value
+  if (!rect) return '--'
+  return `${Math.round(rect.width * 100)}% × ${Math.round(rect.height * 100)}%`
+})
 
 watch(minimalMode, (enabled) => {
   document.body.classList.toggle('minimal-monitor-mode', enabled)
@@ -109,6 +124,7 @@ function applyMessage(message: Snapshot | Envelope) {
     if (message.exp) exp.value = message.exp
     else status.value = message.online ? '本机监控在线' : '本机监控离线'
     if (message.rune) rune.value = message.rune
+    if (message.zone) zone.value = message.zone
     return
   }
   if (message.type === 'map') map.value = message.payload as MapPayload
@@ -120,6 +136,7 @@ function applyMessage(message: Snapshot | Envelope) {
   }
   if (message.type === 'exp') exp.value = message.payload as EXPPayload
   if (message.type === 'rune') rune.value = message.payload as RunePayload
+  if (message.type === 'zone') zone.value = message.payload as ZonePayload
 }
 
 function scheduleReconnect() {
@@ -141,19 +158,21 @@ async function loadBarkSettings() {
   }
 }
 
-async function toggleEXPMinute() {
+async function toggleZoneBreach() {
   if (!barkSettings.value?.configured || barkBusy.value) return
   barkBusy.value = true
   barkError.value = ''
   barkMessage.value = ''
   try {
-    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/exp-minute?token=${encodeURIComponent(token)}`, {
+    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/zone-breach?token=${encodeURIComponent(token)}`, {
       method: 'PUT',
-      body: JSON.stringify({ enabled: !barkSettings.value.expMinuteEnabled }),
+      body: JSON.stringify({ enabled: !barkSettings.value.zoneBreachEnabled }),
     })
-    barkMessage.value = barkSettings.value.expMinuteEnabled ? '经验推送已开启' : '经验推送已关闭'
+    barkMessage.value = barkSettings.value.zoneBreachEnabled
+      ? `离开安全区报警已开启，每 ${barkSettings.value.zoneBreachIntervalSeconds} 秒提醒一次`
+      : '离开安全区报警已关闭'
   } catch (caught) {
-    barkError.value = caught instanceof Error ? caught.message : '通知开关更新失败'
+    barkError.value = caught instanceof Error ? caught.message : '安全区开关更新失败'
   } finally {
     barkBusy.value = false
   }
@@ -261,7 +280,12 @@ onBeforeUnmount(() => {
     <details class="minimal-topology">
       <summary>存储节点映射</summary>
       <div class="minimal-map">
-        <AnnotationStage :map="map" :frame="frame" />
+        <AnnotationStage
+          :map="map"
+          :frame="frame"
+          :safe-zone="zoneRect"
+          :safe-zone-breached="zoneOutside"
+        />
       </div>
     </details>
 
@@ -269,6 +293,9 @@ onBeforeUnmount(() => {
       <p>磁盘使用量：{{ diskUsageText }}</p>
       <p>磁盘使用率：{{ expPercentText }}</p>
       <p>写入锁定：{{ online ? (runeActive ? '已锁定' : '正常') : '等待节点上线' }}</p>
+      <p>
+        分区越界：{{ zoneConfigured ? (online ? (zoneOutside ? '已越界' : '正常') : '等待节点上线') : '未划分区' }}
+      </p>
     </section>
 
     <section>
@@ -285,11 +312,11 @@ onBeforeUnmount(() => {
       <label class="minimal-row">
         <input
           type="checkbox"
-          :checked="barkSettings?.expMinuteEnabled"
+          :checked="barkSettings?.zoneBreachEnabled"
           :disabled="barkBusy || !barkSettings?.configured"
-          @change="toggleEXPMinute"
+          @change="toggleZoneBreach"
         />
-        <span>定时容量报告</span>
+        <span>分区越界告警</span>
       </label>
       <label class="minimal-row">
         <input
@@ -326,7 +353,12 @@ onBeforeUnmount(() => {
   <main v-else class="preview-shell">
     <section class="preview-workspace">
       <section class="stage-frame">
-        <AnnotationStage :map="map" :frame="frame" />
+        <AnnotationStage
+          :map="map"
+          :frame="frame"
+          :safe-zone="zoneRect"
+          :safe-zone-breached="zoneOutside"
+        />
         <div v-if="!map && !frame" class="stage-empty"><div class="empty-orbit"><span></span></div><strong>等待标注数据</strong><p>请在本机 AutoBuff 中开始监控</p></div>
       </section>
 
@@ -361,6 +393,15 @@ onBeforeUnmount(() => {
           <div class="confidence-row"><span>识别置信度</span><strong class="mono">{{ runeConfidenceText }}</strong></div>
         </section>
 
+        <section class="rune-card" :class="{ active: zoneOutside }">
+          <div class="telemetry-heading">
+            <span>安全区</span>
+            <small>{{ zoneConfigured ? (zoneOutside ? '已离开' : '区内') : '未设置' }}</small>
+          </div>
+          <strong class="rune-state">{{ zoneStatusText }}</strong>
+          <div class="confidence-row"><span>范围占比</span><strong class="mono">{{ zoneSizeText }}</strong></div>
+        </section>
+
         <section class="position-card">
           <span>玩家位置</span>
           <strong class="mono">{{ playerText }}</strong>
@@ -375,13 +416,16 @@ onBeforeUnmount(() => {
         <section class="notification-card">
           <div class="telemetry-heading"><span>Bark 推送</span><small>{{ barkSettings?.configured ? 'iPhone 已配置' : '等待配置' }}</small></div>
           <div class="notification-rule">
-            <div><strong>每分钟经验推送</strong><span>当前 EXP 与经验百分比</span></div>
+            <div>
+              <strong>离开安全区报警</strong>
+              <span>角色跑出矩形范围后每 {{ barkSettings?.zoneBreachIntervalSeconds ?? 5 }} 秒提醒一次，直到回到范围内</span>
+            </div>
             <button
               class="toggle-button"
-              :class="{ active: barkSettings?.expMinuteEnabled }"
+              :class="{ active: barkSettings?.zoneBreachEnabled }"
               :disabled="barkBusy || !barkSettings?.configured"
-              :aria-pressed="barkSettings?.expMinuteEnabled"
-              @click="toggleEXPMinute"
+              :aria-pressed="barkSettings?.zoneBreachEnabled"
+              @click="toggleZoneBreach"
             ><span></span></button>
           </div>
           <div class="notification-rule">

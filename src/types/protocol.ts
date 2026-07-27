@@ -58,8 +58,23 @@ export interface RunePayload {
   detectedAt: number
 }
 
+/** 归一化的安全区矩形，左上角原点，四个值都在 0~1。 */
+export interface ZoneRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** 本机对「角色是否离开安全区」的判定结果。rect 为空表示安全区已取消。 */
+export interface ZonePayload {
+  outside: boolean
+  rect: ZoneRect | null
+  detectedAt: number
+}
+
 export interface Envelope<T = unknown> {
-  type: 'map' | 'frame' | 'status' | 'exp' | 'rune'
+  type: 'map' | 'frame' | 'status' | 'exp' | 'rune' | 'zone'
   sequence: number
   payload: T
 }
@@ -72,5 +87,6 @@ export interface Snapshot {
   status?: StatusPayload
   exp?: EXPPayload
   rune?: RunePayload
+  zone?: ZonePayload
   updatedAt: number
 }

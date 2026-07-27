@@ -96,6 +96,8 @@ input:focus { border-color: #748cff; box-shadow: 0 0 0 3px rgba(116,140,255,.13)
 .platform-label { fill: #72efad; }.rope-label { fill: #ffb469; }.portal-label { fill: #77aaff; text-anchor: start; }
 .portal-ring { fill: #07101f; stroke: white; stroke-width: 3; }.portal-dot { fill: #398cff; }.portal-square { display: none; }
 .marker-shadow { fill: #05070c; stroke: white; stroke-width: 2; }.teammate-marker { fill: #ff982f; }.other-marker { fill: #ff4b5f; }
+.safe-zone-box { fill: rgba(85,230,165,.08); stroke: rgba(85,230,165,.7); stroke-width: 3; stroke-dasharray: 12 8; }
+.safe-zone-box.breached { fill: rgba(255,75,95,.10); stroke: rgba(255,106,128,.95); }
 .player-glow { fill: rgba(255,219,64,.35); filter: url(#markerGlow); }.player-marker, .player-arrow { fill: #ffe047; stroke: #05070c; stroke-width: 3; }
 .stage-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--muted); text-align: center; }
 .stage-empty strong { color: var(--text); font-size: 18px; }.stage-empty p { margin: 8px 0; }
@@ -267,6 +269,14 @@ body.minimal-monitor-mode {
 
 .minimal-map .player-glow {
   display: none;
+}
+
+/* 极简模式是黑白线稿，安全区框也去掉配色只留虚线。 */
+.minimal-map .safe-zone-box {
+  fill: none;
+  stroke: #000;
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
 }
 
 .minimal-row {
