@@ -31,6 +31,10 @@ const cpuSamples = ref([18, 21, 19, 24, 27, 25, 31, 29, 33, 28, 26, 30, 34, 32, 
 const writeSampleCount = 18
 const writeSampleSeconds = 5
 const writeSamples = ref<number[]>(new Array(writeSampleCount).fill(0))
+// 经验最后一次变化的时刻，用来在网页端自己判断是否停滞。
+const expLastChangedAt = ref<number | null>(null)
+// 供「已停滞多久」这类随时间变化的判断重新求值，由 CPU 定时器每 1.5 秒推一次。
+const uiClock = ref(Date.now())
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
 let cpuTimer: number | null = null
@@ -94,6 +98,33 @@ const zoneSizeText = computed(() => {
   if (!rect) return '--'
   return `${Math.round(rect.width * 100)}% × ${Math.round(rect.height * 100)}%`
 })
+// 服务端在读不到经验时会清掉停滞计时而不是判定停滞，这里保持一致。
+const expStalledActive = computed(() => {
+  if (!online.value || exp.value?.currentEXP == null) return false
+  const changedAt = expLastChangedAt.value
+  if (changedAt === null) return false
+  const thresholdMS = (barkSettings.value?.expStalledSeconds ?? 120) * 1000
+  return uiClock.value - changedAt >= thresholdMS
+})
+const expStalledStatusText = computed(() => {
+  if (!online.value) return '等待节点上线'
+  if (exp.value?.currentEXP == null) return '等待读数'
+  return expStalledActive.value ? '已停滞' : '正常'
+})
+
+// 只在经验数值真的变化时重置计时；同一个读数反复上报不算变化。
+watch(
+  () => exp.value?.currentEXP ?? null,
+  (current, previous) => {
+    if (current === null) {
+      expLastChangedAt.value = null
+      return
+    }
+    if (previous == null || current !== previous) {
+      expLastChangedAt.value = Date.now()
+    }
+  },
+)
 
 watch(minimalMode, (enabled) => {
   document.body.classList.toggle('minimal-monitor-mode', enabled)
@@ -144,6 +175,8 @@ function startMinimalCharts() {
       const previous = cpuSamples.value.at(-1) || 24
       const next = Math.max(8, Math.min(68, previous + Math.round((Math.random() - 0.5) * 12)))
       cpuSamples.value = [...cpuSamples.value.slice(1), next]
+      // 顺带推进界面时钟，让「I/O 停滞」这类随时间变化的状态及时刷新。
+      uiClock.value = Date.now()
     }, 1500)
   }
   if (writeTimer === null) {
@@ -401,6 +434,7 @@ onBeforeUnmount(() => {
       <p>
         分区越界：{{ zoneConfigured ? (online ? (zoneOutside ? '已越界' : '正常') : '等待节点上线') : '未划分区' }}
       </p>
+      <p>I/O 停滞：{{ expStalledStatusText }}</p>
     </section>
 
     <section>
