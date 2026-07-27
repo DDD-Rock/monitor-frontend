@@ -25,3 +25,13 @@ export interface ApiError {
   error: string
   message: string
 }
+
+export interface BarkSettings {
+  configured: boolean
+  expMinuteEnabled: boolean
+  expStalledEnabled: boolean
+  expStalledSeconds: number
+  runeAlertEnabled: boolean
+  runeAlertIntervalSeconds: number
+  barkServerURL: string
+}

@@ -3,7 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiRequest } from '../api/client'
 import { useAuthStore } from '../stores/auth'
-import type { CreatedMonitorSession, MonitorSession } from '../types/api'
+import type { BarkSettings, CreatedMonitorSession, MonitorSession } from '../types/api'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -13,6 +13,12 @@ const created = ref<CreatedMonitorSession | null>(null)
 const busy = ref(false)
 const error = ref('')
 const copied = ref(false)
+const barkSettings = ref<BarkSettings | null>(null)
+const barkDeviceKey = ref('')
+const barkEnabled = ref(false)
+const barkBusy = ref(false)
+const barkMessage = ref('')
+const barkError = ref('')
 
 onMounted(async () => {
   if (!(await auth.restore())) {
@@ -20,8 +26,13 @@ onMounted(async () => {
     return
   }
   try {
-    const response = await apiRequest<{ session: MonitorSession | null }>('/api/monitor/sessions/current')
-    current.value = response.session
+    const [sessionResponse, notificationResponse] = await Promise.all([
+      apiRequest<{ session: MonitorSession | null }>('/api/monitor/sessions/current'),
+      apiRequest<BarkSettings>('/api/notifications/bark'),
+    ])
+    current.value = sessionResponse.session
+    barkSettings.value = notificationResponse
+    barkEnabled.value = notificationResponse.expMinuteEnabled
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '无法读取监控会话'
   }
@@ -41,6 +52,41 @@ async function createSession() {
     error.value = caught instanceof Error ? caught.message : '创建失败'
   } finally {
     busy.value = false
+  }
+}
+
+async function saveBark() {
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/bark', {
+      method: 'PUT',
+      body: JSON.stringify({
+        deviceKey: barkDeviceKey.value,
+        expMinuteEnabled: barkEnabled.value,
+      }),
+    })
+    barkDeviceKey.value = ''
+    barkMessage.value = 'Bark 配置已保存'
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : 'Bark 配置保存失败'
+  } finally {
+    barkBusy.value = false
+  }
+}
+
+async function testBark() {
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    await apiRequest('/api/notifications/bark/test', { method: 'POST' })
+    barkMessage.value = '测试通知已发送'
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '测试通知发送失败'
+  } finally {
+    barkBusy.value = false
   }
 }
 
@@ -106,6 +152,30 @@ function logout() {
           <h2>等待创建</h2>
           <p class="muted">生成后，这里会显示专属预览链接。</p>
         </template>
+      </article>
+
+      <article class="panel bark-settings-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">IPHONE PUSH</p><h2>Bark 通知</h2></div>
+          <span class="tag" :class="{ configured: barkSettings?.configured }">{{ barkSettings?.configured ? '已配置' : '未配置' }}</span>
+        </div>
+        <p class="muted">先在 iPhone Bark 中添加自建服务器，再把生成的 DeviceKey 填到这里。</p>
+        <p class="bark-server-box"><span>服务器地址</span><strong class="mono">{{ barkSettings?.barkServerURL || '正在读取…' }}</strong></p>
+        <label>
+          Bark DeviceKey
+          <input v-model.trim="barkDeviceKey" maxlength="128" :placeholder="barkSettings?.configured ? '已安全保存；重新填写可替换' : '请输入 Bark 生成的 DeviceKey'" />
+        </label>
+        <p class="device-key-hint">填写 Bark 首页“推送地址”的最后一段，不要填写 64 位 APNs DeviceToken。</p>
+        <label class="checkbox-row">
+          <input v-model="barkEnabled" type="checkbox" />
+          每分钟推送当前经验值和百分比
+        </label>
+        <p v-if="barkError" class="form-error">{{ barkError }}</p>
+        <p v-if="barkMessage" class="form-success">{{ barkMessage }}</p>
+        <div class="button-row">
+          <button class="primary-button" :disabled="barkBusy || !barkDeviceKey" @click="saveBark">{{ barkBusy ? '处理中…' : '保存配置' }}</button>
+          <button class="secondary-button" :disabled="barkBusy || !barkSettings?.configured" @click="testBark">发送测试</button>
+        </div>
       </article>
     </section>
   </main>

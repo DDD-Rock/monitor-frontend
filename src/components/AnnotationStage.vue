@@ -35,6 +35,7 @@ const point = (value: Point) => `${value.x * viewWidth},${value.y * viewHeight.v
       <g v-for="(portal, index) in map.portals" :key="portal.id">
         <circle class="portal-ring" :cx="portal.point.x * viewWidth" :cy="portal.point.y * viewHeight" r="11" />
         <circle class="portal-dot" :cx="portal.point.x * viewWidth" :cy="portal.point.y * viewHeight" r="6" />
+        <rect class="portal-square" :x="portal.point.x * viewWidth - 8" :y="portal.point.y * viewHeight - 8" width="16" height="16" />
         <text class="map-label portal-label" :x="portal.point.x * viewWidth + 17" :y="portal.point.y * viewHeight + 4">T{{ index + 1 }}</text>
       </g>
     </g>
