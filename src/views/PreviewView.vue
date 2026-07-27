@@ -9,6 +9,8 @@ import type { Envelope, EXPPayload, FramePayload, MapPayload, RunePayload, Snaps
 const route = useRoute()
 const token = String(route.params.token || '')
 const minimalMode = computed(() => route.meta.minimal === true)
+const darkThemeKey = 'minimalDarkTheme'
+const minimalDark = ref(readStoredDarkTheme())
 const minimalPath = computed(() => `/preview/${encodeURIComponent(token)}/minimal`)
 const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
@@ -25,9 +27,15 @@ const barkMessage = ref('')
 const barkError = ref('')
 const expStalledSeconds = ref(120)
 const cpuSamples = ref([18, 21, 19, 24, 27, 25, 31, 29, 33, 28, 26, 30, 34, 32, 29, 35, 31, 27])
+// 真实数据：每 5 秒采一次 EXP，存的是这 5 秒的增量，伪装成磁盘写入速率。
+const writeSampleCount = 18
+const writeSampleSeconds = 5
+const writeSamples = ref<number[]>(new Array(writeSampleCount).fill(0))
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
 let cpuTimer: number | null = null
+let writeTimer: number | null = null
+let lastSampledEXP: number | null = null
 let defaultDocumentTitle = ''
 
 const playerText = computed(() => frame.value?.player ? `X ${(frame.value.player.x * 100).toFixed(1)} · Y ${(frame.value.player.y * 100).toFixed(1)}` : 'X -- · Y --')
@@ -40,6 +48,21 @@ const cpuLoadText = computed(() => (((cpuSamples.value.at(-1) || 0) / 100) * 1.6
 const cpuPoints = computed(() => cpuSamples.value.map((value, index) => {
   const x = index * 260 / (cpuSamples.value.length - 1)
   const y = 54 - value * 0.5
+  return `${x.toFixed(1)},${y.toFixed(1)}`
+}).join(' '))
+const writeRateText = computed(
+  () => `${((writeSamples.value.at(-1) || 0) / writeSampleSeconds).toFixed(1)} MB/s`,
+)
+const writeAverageText = computed(() => {
+  const total = writeSamples.value.reduce((sum, value) => sum + value, 0)
+  const seconds = writeSamples.value.length * writeSampleSeconds
+  return `${(total / seconds).toFixed(1)} MB/s`
+})
+// 经验增量没有固定上限，按窗口内峰值自动缩放；下限取 1 让空闲时是一条底部直线。
+const writePeak = computed(() => Math.max(1, ...writeSamples.value))
+const writePoints = computed(() => writeSamples.value.map((value, index) => {
+  const x = index * 260 / (writeSamples.value.length - 1)
+  const y = 54 - (value / writePeak.value) * 50
   return `${x.toFixed(1)},${y.toFixed(1)}`
 }).join(' '))
 const channelStatusText = computed(() => {
@@ -74,28 +97,94 @@ const zoneSizeText = computed(() => {
 
 watch(minimalMode, (enabled) => {
   document.body.classList.toggle('minimal-monitor-mode', enabled)
+  applyMinimalTheme()
   if (defaultDocumentTitle) document.title = enabled ? '服务器存储监控' : defaultDocumentTitle
-  if (enabled) startCPUFeed()
-  else stopCPUFeed()
+  if (enabled) startMinimalCharts()
+  else stopMinimalCharts()
 })
+
+// 隐私模式下 localStorage 会抛异常，读写都不能让它把页面带崩。
+function readStoredDarkTheme() {
+  try {
+    return localStorage.getItem(darkThemeKey) === '1'
+  } catch {
+    return false
+  }
+}
+
+function storeDarkTheme(enabled: boolean) {
+  try {
+    localStorage.setItem(darkThemeKey, enabled ? '1' : '0')
+  } catch {
+    // 存不下就只在本次会话生效，不影响切换本身。
+  }
+}
+
+/// 深色只在极简模式下生效，标准预览页本来就是深色主题。
+function applyMinimalTheme() {
+  document.body.classList.toggle(
+    'minimal-dark-theme',
+    minimalMode.value && minimalDark.value,
+  )
+}
+
+function toggleMinimalDark() {
+  minimalDark.value = !minimalDark.value
+  storeDarkTheme(minimalDark.value)
+  applyMinimalTheme()
+}
 
 function formatPercent(value: number) {
   return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
 }
 
-function startCPUFeed() {
-  if (cpuTimer !== null) return
-  cpuTimer = window.setInterval(() => {
-    const previous = cpuSamples.value.at(-1) || 24
-    const next = Math.max(8, Math.min(68, previous + Math.round((Math.random() - 0.5) * 12)))
-    cpuSamples.value = [...cpuSamples.value.slice(1), next]
-  }, 1500)
+function startMinimalCharts() {
+  if (cpuTimer === null) {
+    cpuTimer = window.setInterval(() => {
+      const previous = cpuSamples.value.at(-1) || 24
+      const next = Math.max(8, Math.min(68, previous + Math.round((Math.random() - 0.5) * 12)))
+      cpuSamples.value = [...cpuSamples.value.slice(1), next]
+    }, 1500)
+  }
+  if (writeTimer === null) {
+    writeTimer = window.setInterval(sampleWriteRate, writeSampleSeconds * 1000)
+  }
 }
 
-function stopCPUFeed() {
-  if (cpuTimer === null) return
-  clearInterval(cpuTimer)
-  cpuTimer = null
+function stopMinimalCharts() {
+  if (cpuTimer !== null) {
+    clearInterval(cpuTimer)
+    cpuTimer = null
+  }
+  if (writeTimer !== null) {
+    clearInterval(writeTimer)
+    writeTimer = null
+  }
+  lastSampledEXP = null
+}
+
+/// 取一格经验增量。
+function sampleWriteRate() {
+  const current = exp.value?.currentEXP ?? null
+  if (current == null) {
+    // 读不到经验时把基准也清掉，等下次读到时重新建立，
+    // 否则跨过这段空白的第一格会变成一个假的巨大尖峰。
+    lastSampledEXP = null
+    pushWriteSample(0)
+    return
+  }
+  const previous = lastSampledEXP
+  lastSampledEXP = current
+  if (previous == null) {
+    pushWriteSample(0)
+    return
+  }
+  // 升级或偶发误识别会让经验回落，负增量在写入速率语义下没有意义。
+  pushWriteSample(Math.max(0, current - previous))
+}
+
+function pushWriteSample(value: number) {
+  writeSamples.value = [...writeSamples.value.slice(1), value]
 }
 
 function connect() {
@@ -248,15 +337,17 @@ onMounted(() => {
   if (minimalMode.value) {
     document.body.classList.add('minimal-monitor-mode')
     document.title = '服务器存储监控'
-    startCPUFeed()
+    applyMinimalTheme()
+    startMinimalCharts()
   }
   connect()
   loadBarkSettings()
 })
 onBeforeUnmount(() => {
   document.body.classList.remove('minimal-monitor-mode')
+  document.body.classList.remove('minimal-dark-theme')
   if (defaultDocumentTitle) document.title = defaultDocumentTitle
-  stopCPUFeed()
+  stopMinimalCharts()
   if (reconnectTimer !== null) clearTimeout(reconnectTimer)
   socket?.close()
 })
@@ -266,14 +357,28 @@ onBeforeUnmount(() => {
   <main v-if="minimalMode" class="minimal-preview">
     <p><strong>服务器存储监控</strong></p>
     <p>节点状态：{{ online ? '在线' : connected ? '等待数据' : '正在连接' }}</p>
+    <label class="minimal-row">
+      <input type="checkbox" :checked="minimalDark" @change="toggleMinimalDark" />
+      <span>深色主题</span>
+    </label>
 
-    <section class="minimal-cpu">
+    <section class="minimal-chart">
       <p>CPU 使用率：{{ cpuUsageText }}</p>
       <p>1 分钟负载：{{ cpuLoadText }}</p>
       <svg viewBox="0 0 260 56" aria-label="CPU 使用率变化曲线">
         <line x1="0" y1="18" x2="260" y2="18" />
         <line x1="0" y1="36" x2="260" y2="36" />
         <polyline :points="cpuPoints" />
+      </svg>
+    </section>
+
+    <section class="minimal-chart">
+      <p>磁盘写入速率：{{ writeRateText }}</p>
+      <p>平均写入：{{ writeAverageText }}</p>
+      <svg viewBox="0 0 260 56" aria-label="磁盘写入速率变化曲线">
+        <line x1="0" y1="18" x2="260" y2="18" />
+        <line x1="0" y1="36" x2="260" y2="36" />
+        <polyline :points="writePoints" />
       </svg>
     </section>
 

@@ -157,45 +157,59 @@ input:focus { border-color: #748cff; box-shadow: 0 0 0 3px rgba(116,140,255,.13)
 
 body.minimal-monitor-mode {
   min-width: 0;
-  background: #fff;
-  color: #000;
+  /* 极简模式只用三种颜色，切换深色主题只需要换这三个值。 */
+  --minimal-bg: #fff;
+  --minimal-fg: #000;
+  --minimal-grid: #ddd;
+  /* 让原生控件（复选框、数字框、按钮）跟着一起变，否则深色下会是一块块白斑。 */
+  color-scheme: light;
+  background: var(--minimal-bg);
+  color: var(--minimal-fg);
+}
+
+body.minimal-monitor-mode.minimal-dark-theme {
+  --minimal-bg: #000;
+  --minimal-fg: #fff;
+  /* 网格线在黑底上要用深灰，用 #ddd 会比数据曲线本身还抢眼。 */
+  --minimal-grid: #333;
+  color-scheme: dark;
 }
 
 .minimal-preview {
   width: min(100%, 420px);
   min-height: 100vh;
   padding: 8px;
-  background: #fff;
-  color: #000;
+  background: var(--minimal-bg);
+  color: var(--minimal-fg);
   font: 13px/1.35 Arial, sans-serif;
 }
 
 .minimal-preview > section {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #000;
+  border-top: 1px solid var(--minimal-fg);
 }
 
 .minimal-preview p {
   margin: 0 0 5px;
 }
 
-.minimal-cpu svg {
+.minimal-chart svg {
   display: block;
   width: min(100%, 260px);
   height: 56px;
   margin-top: 5px;
-  border: 1px solid #000;
+  border: 1px solid var(--minimal-fg);
 }
 
-.minimal-cpu line {
-  stroke: #ddd;
+.minimal-chart line {
+  stroke: var(--minimal-grid);
   stroke-width: 1;
 }
 
-.minimal-cpu polyline {
+.minimal-chart polyline {
   fill: none;
-  stroke: #000;
+  stroke: var(--minimal-fg);
   stroke-width: 1.5;
 }
 
@@ -219,40 +233,41 @@ body.minimal-monitor-mode {
   width: 100%;
   height: auto;
   min-height: 0;
-  background: #fff;
+  background: var(--minimal-bg);
 }
 
 .minimal-map .annotation-stage > rect {
-  fill: #fff;
+  fill: var(--minimal-bg);
 }
 
 .minimal-map .grid-lines line {
-  stroke: #ddd;
+  stroke: var(--minimal-grid);
 }
 
 .minimal-map .platform-line,
 .minimal-map .rope-line {
-  stroke: #000;
+  stroke: var(--minimal-fg);
   stroke-width: 3;
 }
 
+/* stroke 是给文字描一圈底色当描边，让它压在线条上也能看清。 */
 .minimal-map .map-label {
-  fill: #000;
-  stroke: #fff;
+  fill: var(--minimal-fg);
+  stroke: var(--minimal-bg);
   stroke-width: 5px;
 }
 
 .minimal-map .marker-shadow {
-  fill: #fff;
-  stroke: #000;
+  fill: var(--minimal-bg);
+  stroke: var(--minimal-fg);
 }
 
 .minimal-map .teammate-marker,
 .minimal-map .other-marker,
 .minimal-map .player-marker,
 .minimal-map .player-arrow {
-  fill: #000;
-  stroke: #000;
+  fill: var(--minimal-fg);
+  stroke: var(--minimal-fg);
 }
 
 .minimal-map .portal-ring,
@@ -262,8 +277,8 @@ body.minimal-monitor-mode {
 
 .minimal-map .portal-square {
   display: block;
-  fill: #fff;
-  stroke: #000;
+  fill: var(--minimal-bg);
+  stroke: var(--minimal-fg);
   stroke-width: 2;
 }
 
@@ -271,10 +286,10 @@ body.minimal-monitor-mode {
   display: none;
 }
 
-/* 极简模式是黑白线稿，安全区框也去掉配色只留虚线。 */
+/* 极简模式是单色线稿，安全区框也去掉配色只留虚线。 */
 .minimal-map .safe-zone-box {
   fill: none;
-  stroke: #000;
+  stroke: var(--minimal-fg);
   stroke-width: 2;
   stroke-dasharray: 8 6;
 }
@@ -285,7 +300,7 @@ body.minimal-monitor-mode {
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  color: #000;
+  color: var(--minimal-fg);
   font-size: inherit;
   font-weight: 400;
 }
@@ -293,16 +308,16 @@ body.minimal-monitor-mode {
 .minimal-row input[type="checkbox"] {
   width: auto;
   margin: 0;
-  accent-color: #000;
+  accent-color: var(--minimal-fg);
 }
 
 .minimal-seconds {
   width: 68px;
   padding: 2px 4px;
-  border: 1px solid #000;
+  border: 1px solid var(--minimal-fg);
   border-radius: 0;
-  background: #fff;
-  color: #000;
+  background: var(--minimal-bg);
+  color: var(--minimal-fg);
 }
 
 .minimal-preview button {
