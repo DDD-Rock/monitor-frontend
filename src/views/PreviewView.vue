@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { apiRequest } from '../api/client'
 import AnnotationStage from '../components/AnnotationStage.vue'
 import type { BarkSettings } from '../types/api'
-import type { Envelope, EXPPayload, FramePayload, MapPayload, RunePayload, Snapshot, StatusPayload, ZonePayload } from '../types/protocol'
+import type { Envelope, EXPPayload, FramePayload, GainPayload, MapPayload, RunePayload, Snapshot, StatusPayload, ZonePayload } from '../types/protocol'
 
 const route = useRoute()
 const token = String(route.params.token || '')
@@ -17,6 +17,8 @@ const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
 const rune = ref<RunePayload | null>(null)
 const zone = ref<ZonePayload | null>(null)
+const gain = ref<GainPayload | null>(null)
+const gainBusy = ref(false)
 const online = ref(false)
 const status = ref('正在连接监控服务…')
 const connected = ref(false)
@@ -111,6 +113,10 @@ const expStalledStatusText = computed(() => {
   if (exp.value?.currentEXP == null) return '等待读数'
   return expStalledActive.value ? '已停滞' : '正常'
 })
+const inflowText = computed(() => formatGainMB(gain.value?.inflow10m))
+const outflowText = computed(() => formatGainMB(gain.value?.outflow1h))
+const totalPackageText = computed(() => formatGainMB(gain.value?.totalUsage))
+const dailyPackageText = computed(() => formatGainMB(gain.value?.dailyUsage))
 
 // 只在经验数值真的变化时重置计时；同一个读数反复上报不算变化。
 watch(
@@ -167,6 +173,11 @@ function toggleMinimalDark() {
 
 function formatPercent(value: number) {
   return value.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function formatGainMB(value: number | null | undefined) {
+  if (value == null) return '-- MB'
+  return `${value.toLocaleString('zh-CN')} MB`
 }
 
 function startMinimalCharts() {
@@ -247,6 +258,7 @@ function applyMessage(message: Snapshot | Envelope) {
     else status.value = message.online ? '本机监控在线' : '本机监控离线'
     if (message.rune) rune.value = message.rune
     if (message.zone) zone.value = message.zone
+    if (message.gain) gain.value = message.gain
     return
   }
   if (message.type === 'map') map.value = message.payload as MapPayload
@@ -259,6 +271,7 @@ function applyMessage(message: Snapshot | Envelope) {
   if (message.type === 'exp') exp.value = message.payload as EXPPayload
   if (message.type === 'rune') rune.value = message.payload as RunePayload
   if (message.type === 'zone') zone.value = message.payload as ZonePayload
+  if (message.type === 'gain') gain.value = message.payload as GainPayload
 }
 
 function scheduleReconnect() {
@@ -365,6 +378,30 @@ async function testBark() {
   }
 }
 
+async function loadGain() {
+  try {
+    gain.value = await apiRequest<GainPayload>(`/api/preview/exp-gain?token=${encodeURIComponent(token)}`)
+  } catch {
+    // WebSocket 推送仍会补上；这里失败不打扰极简页主流程。
+  }
+}
+
+async function resetTotalPackage() {
+  if (gainBusy.value) return
+  if (!window.confirm('确定清空总资源包用量？当日用量和流量窗口不会一起清。')) return
+  gainBusy.value = true
+  try {
+    gain.value = await apiRequest<GainPayload>(
+      `/api/preview/exp-gain/reset-total?token=${encodeURIComponent(token)}`,
+      { method: 'POST' },
+    )
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '清空总资源包用量失败'
+  } finally {
+    gainBusy.value = false
+  }
+}
+
 onMounted(() => {
   defaultDocumentTitle = document.title
   if (minimalMode.value) {
@@ -375,6 +412,7 @@ onMounted(() => {
   }
   connect()
   loadBarkSettings()
+  loadGain()
 })
 onBeforeUnmount(() => {
   document.body.classList.remove('minimal-monitor-mode')
@@ -430,6 +468,13 @@ onBeforeUnmount(() => {
     <section>
       <p>磁盘使用量：{{ diskUsageText }}</p>
       <p>磁盘使用率：{{ expPercentText }}</p>
+      <p>流入流量：{{ inflowText }}</p>
+      <p>流出流量：{{ outflowText }}</p>
+      <p>总资源包用量：{{ totalPackageText }}</p>
+      <p>当日资源包用量：{{ dailyPackageText }}</p>
+      <button :disabled="gainBusy" @click="resetTotalPackage">
+        {{ gainBusy ? '处理中…' : '清空总资源包用量' }}
+      </button>
       <p>写入锁定：{{ online ? (runeActive ? '已锁定' : '正常') : '等待节点上线' }}</p>
       <p>
         分区越界：{{ zoneConfigured ? (online ? (zoneOutside ? '已越界' : '正常') : '等待节点上线') : '未划分区' }}

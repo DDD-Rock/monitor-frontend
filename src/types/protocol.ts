@@ -73,8 +73,20 @@ export interface ZonePayload {
   detectedAt: number
 }
 
+/**
+ * 服务端汇总的经验获取量。
+ * 极简模式会伪装成：流入流量 / 流出流量 / 总资源包用量 / 当日资源包用量。
+ */
+export interface GainPayload {
+  inflow10m: number
+  outflow1h: number
+  totalUsage: number
+  dailyUsage: number
+  sampledAt: number
+}
+
 export interface Envelope<T = unknown> {
-  type: 'map' | 'frame' | 'status' | 'exp' | 'rune' | 'zone'
+  type: 'map' | 'frame' | 'status' | 'exp' | 'rune' | 'zone' | 'gain'
   sequence: number
   payload: T
 }
@@ -88,5 +100,6 @@ export interface Snapshot {
   exp?: EXPPayload
   rune?: RunePayload
   zone?: ZonePayload
+  gain?: GainPayload
   updatedAt: number
 }
