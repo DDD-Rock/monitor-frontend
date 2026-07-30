@@ -21,7 +21,10 @@ async function submit() {
   }
   try {
     await auth.authenticate(props.mode, username.value, password.value, inviteCode.value)
-    await router.replace('/dashboard')
+    const redirect = typeof router.currentRoute.value.query.redirect === 'string'
+      ? router.currentRoute.value.query.redirect
+      : '/functions'
+    await router.replace(redirect)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '请求失败，请稍后重试'
   }
@@ -43,7 +46,7 @@ async function submit() {
         <div>
           <p class="eyebrow">{{ isRegister ? 'CREATE ACCOUNT' : 'WELCOME BACK' }}</p>
           <h2>{{ isRegister ? '创建监控账号' : '登录监控账号' }}</h2>
-          <p>{{ isRegister ? '使用有效邀请码注册后，即可在 AutoBuff 客户端和监控网页登录。' : '登录后直接查看当前账号的远程监控。' }}</p>
+          <p>{{ isRegister ? '使用有效邀请码注册后，即可在 AutoBuff 客户端和控制台登录。' : '登录后进入功能中心，选择需要使用的工具。' }}</p>
         </div>
 
         <label>

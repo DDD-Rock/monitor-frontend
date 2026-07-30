@@ -69,6 +69,7 @@ function logout() {
       <div class="brand-row"><span class="mini-mark">A</span><strong>AutoBuff Monitor</strong></div>
       <div class="user-row">
         <span>{{ auth.user?.username }}</span>
+        <RouterLink class="text-button" to="/functions">功能中心</RouterLink>
         <RouterLink class="text-button" to="/dashboard">返回监控</RouterLink>
         <button class="text-button" @click="logout">退出</button>
       </div>

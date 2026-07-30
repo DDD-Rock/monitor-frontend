@@ -13,7 +13,10 @@ const auth = useAuthStore()
 const minimalMode = computed(() => route.meta.minimal === true)
 const darkThemeKey = 'minimalDarkTheme'
 const minimalDark = ref(readStoredDarkTheme())
-const minimalPath = computed(() => '/dashboard/minimal')
+const minimalPath = computed(() => ({
+  path: '/dashboard/minimal',
+  query: route.query.client ? { client: route.query.client } : {},
+}))
 const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
@@ -43,6 +46,7 @@ let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
 let cpuTimer: number | null = null
 let writeTimer: number | null = null
+let uiTimer: number | null = null
 let lastSampledEXP: number | null = null
 let defaultDocumentTitle = ''
 
@@ -119,6 +123,21 @@ const inflowText = computed(() => formatGainMB(gain.value?.inflow10m))
 const outflowText = computed(() => formatGainMB(gain.value?.outflow1h))
 const totalPackageText = computed(() => formatGainMB(gain.value?.totalUsage))
 const dailyPackageText = computed(() => formatGainMB(gain.value?.dailyUsage))
+const gainSampledText = computed(() => {
+  if (!gain.value?.sampledAt) return '等待统计数据'
+  return `更新于 ${new Date(gain.value.sampledAt).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })}`
+})
+const expStalledDetailText = computed(() => {
+  if (!online.value) return '本机离线'
+  if (exp.value?.currentEXP == null) return '等待经验读数'
+  if (!expStalledActive.value || expLastChangedAt.value === null) return '经验持续增长'
+  const seconds = Math.max(0, Math.floor((uiClock.value - expLastChangedAt.value) / 1000))
+  return `已连续 ${seconds} 秒没有增长`
+})
 
 // 只在经验数值真的变化时重置计时；同一个读数反复上报不算变化。
 watch(
@@ -188,12 +207,19 @@ function startMinimalCharts() {
       const previous = cpuSamples.value.at(-1) || 24
       const next = Math.max(8, Math.min(68, previous + Math.round((Math.random() - 0.5) * 12)))
       cpuSamples.value = [...cpuSamples.value.slice(1), next]
-      // 顺带推进界面时钟，让「I/O 停滞」这类随时间变化的状态及时刷新。
-      uiClock.value = Date.now()
     }, 1500)
   }
+}
+
+// 这两项来自真实 EXP 数据，标准版和极简版都需要持续更新。
+function startDataSampling() {
   if (writeTimer === null) {
     writeTimer = window.setInterval(sampleWriteRate, writeSampleSeconds * 1000)
+  }
+  if (uiTimer === null) {
+    uiTimer = window.setInterval(() => {
+      uiClock.value = Date.now()
+    }, 1000)
   }
 }
 
@@ -202,9 +228,16 @@ function stopMinimalCharts() {
     clearInterval(cpuTimer)
     cpuTimer = null
   }
+}
+
+function stopDataSampling() {
   if (writeTimer !== null) {
     clearInterval(writeTimer)
     writeTimer = null
+  }
+  if (uiTimer !== null) {
+    clearInterval(uiTimer)
+    uiTimer = null
   }
   lastSampledEXP = null
 }
@@ -240,7 +273,10 @@ function connect() {
     return
   }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  socket = new WebSocket(`${protocol}//${location.host}/ws/view?access_token=${encodeURIComponent(accessToken)}`)
+  const clientID = typeof route.query.client === 'string' ? route.query.client : ''
+  const query = new URLSearchParams({ access_token: accessToken })
+  if (clientID) query.set('client_id', clientID)
+  socket = new WebSocket(`${protocol}//${location.host}/ws/view?${query}`)
   socket.onopen = () => {
     connected.value = true
     reconnectAttempt.value = 0
@@ -422,6 +458,7 @@ onMounted(async () => {
     startMinimalCharts()
   }
   connect()
+  startDataSampling()
   loadBarkSettings()
   loadGain()
 })
@@ -430,6 +467,7 @@ onBeforeUnmount(() => {
   document.body.classList.remove('minimal-dark-theme')
   if (defaultDocumentTitle) document.title = defaultDocumentTitle
   stopMinimalCharts()
+  stopDataSampling()
   if (reconnectTimer !== null) clearTimeout(reconnectTimer)
   socket?.close()
 })
@@ -546,71 +584,127 @@ onBeforeUnmount(() => {
   </main>
 
   <main v-else class="preview-shell">
+    <header class="preview-topbar">
+      <div class="preview-brand">
+        <span class="preview-brand-mark">A</span>
+        <div>
+          <strong>AutoBuff Monitor</strong>
+          <span>实时作业中心</span>
+        </div>
+      </div>
+      <div class="preview-topbar-actions">
+        <span class="connection-pill" :class="{ online }">
+          <i></i>{{ online ? '本机在线' : connected ? '等待本机' : '连接中' }}
+        </span>
+        <RouterLink class="preview-nav-link" to="/functions">功能中心</RouterLink>
+        <RouterLink class="preview-nav-link" to="/settings">设置</RouterLink>
+        <RouterLink class="preview-nav-link" :to="minimalPath">极简模式</RouterLink>
+      </div>
+    </header>
+
     <section class="preview-workspace">
-      <section class="stage-frame">
-        <AnnotationStage
-          :map="map"
-          :frame="frame"
-          :safe-zone="zoneRect"
-          :safe-zone-breached="zoneOutside"
-        />
-        <div v-if="!map && !frame" class="stage-empty"><div class="empty-orbit"><span></span></div><strong>等待标注数据</strong><p>请在本机 AutoBuff 中开始监控</p></div>
+      <section class="monitor-main">
+        <section class="stage-frame">
+          <div class="stage-toolbar">
+            <div>
+              <span>当前地图</span>
+              <strong>{{ map?.name || '等待地图数据' }}</strong>
+            </div>
+            <span class="stage-coordinate mono">{{ playerText }}</span>
+          </div>
+          <AnnotationStage
+            :map="map"
+            :frame="frame"
+            :safe-zone="zoneRect"
+            :safe-zone-breached="zoneOutside"
+          />
+          <div class="stage-legend">
+            <span><i class="legend-player"></i>本人</span>
+            <span><i class="legend-team"></i>队友 {{ frame?.teammates.length || 0 }}</span>
+            <span><i class="legend-other"></i>其他 {{ frame?.others.length || 0 }}</span>
+            <span class="mono">{{ frame ? `${frame.sourceFPS.toFixed(1)} FPS` : '-- FPS' }}</span>
+          </div>
+          <div v-if="!map && !frame" class="stage-empty"><div class="empty-orbit"><span></span></div><strong>等待标注数据</strong><p>请在本机 AutoBuff 中开始监控</p></div>
+        </section>
+
+        <section class="performance-strip">
+          <div class="performance-metric primary-metric">
+            <span>当前经验</span>
+            <strong class="mono">{{ expValueText }}</strong>
+            <small>识别置信度 {{ expConfidenceText }}</small>
+          </div>
+          <div class="performance-metric">
+            <span>当前进度</span>
+            <strong class="mono accent-value">{{ expPercentText }}</strong>
+            <small>{{ gainSampledText }}</small>
+          </div>
+          <div class="performance-metric rate-metric">
+            <div>
+              <span>实时增长速率</span>
+              <strong class="mono">{{ writeRateText.replace('MB/s', 'EXP/s') }}</strong>
+              <small>近 90 秒均值 {{ writeAverageText.replace('MB/s', 'EXP/s') }}</small>
+            </div>
+            <svg viewBox="0 0 260 56" aria-label="经验增长速率变化曲线">
+              <line x1="0" y1="18" x2="260" y2="18" />
+              <line x1="0" y1="36" x2="260" y2="36" />
+              <polyline :points="writePoints" />
+            </svg>
+          </div>
+          <div class="performance-metric stalled-metric" :class="{ alert: expStalledActive }">
+            <span>增长状态</span>
+            <strong>{{ expStalledStatusText }}</strong>
+            <small>{{ expStalledDetailText }}</small>
+          </div>
+        </section>
       </section>
 
       <aside class="telemetry-panel">
-        <section class="telemetry-status">
+        <section class="telemetry-status overview-card">
           <div class="telemetry-heading">
-            <span>实时状态</span>
-            <div class="telemetry-heading-actions">
-              <i :class="{ active: online }"></i>
-              <RouterLink class="preview-mode-link" to="/settings">设置</RouterLink>
-              <RouterLink class="preview-mode-link" :to="minimalPath">极简版</RouterLink>
-            </div>
+            <span>监控概览</span>
+            <i :class="{ active: online }"></i>
           </div>
-          <strong class="telemetry-map-name">{{ map?.name || '等待地图数据' }}</strong>
           <p>{{ channelStatusText }}</p>
-        </section>
-
-        <section class="exp-card">
-          <div class="telemetry-heading"><span>经验数据</span></div>
-          <div class="exp-values">
-            <div><span>当前 EXP</span><strong class="mono">{{ expValueText }}</strong></div>
-            <div><span>经验进度</span><strong class="mono accent-value">{{ expPercentText }}</strong></div>
+          <div class="overview-grid">
+            <div><span>玩家位置</span><strong class="mono">{{ playerText }}</strong></div>
+            <div><span>安全区</span><strong>{{ zoneConfigured ? (zoneOutside ? '已离开' : '区内') : '未设置' }}</strong></div>
           </div>
-          <div class="confidence-row"><span>识别置信度</span><strong class="mono">{{ expConfidenceText }}</strong></div>
         </section>
 
-        <section class="rune-card" :class="{ active: runeActive }">
-          <div class="telemetry-heading">
-            <span>符文诅咒</span>
-            <small>{{ runeActive ? '已触发' : '正常' }}</small>
+        <section class="gain-card">
+          <div class="telemetry-heading"><span>经验收益</span><small>{{ gainSampledText }}</small></div>
+          <div class="gain-grid">
+            <div><span>近 10 分钟</span><strong class="mono">{{ inflowText.replace(' MB', '') }}</strong><small>EXP</small></div>
+            <div><span>近 1 小时</span><strong class="mono">{{ outflowText.replace(' MB', '') }}</strong><small>EXP</small></div>
+            <div><span>累计收益</span><strong class="mono">{{ totalPackageText.replace(' MB', '') }}</strong><small>EXP</small></div>
+            <div><span>今日收益</span><strong class="mono">{{ dailyPackageText.replace(' MB', '') }}</strong><small>EXP</small></div>
           </div>
-          <strong class="rune-state">{{ runeStatusText }}</strong>
-          <div class="confidence-row"><span>识别置信度</span><strong class="mono">{{ runeConfidenceText }}</strong></div>
+          <button class="gain-reset" :disabled="gainBusy" @click="resetTotalPackage">
+            {{ gainBusy ? '处理中…' : '重置累计收益' }}
+          </button>
         </section>
 
-        <section class="rune-card" :class="{ active: zoneOutside }">
-          <div class="telemetry-heading">
-            <span>安全区</span>
-            <small>{{ zoneConfigured ? (zoneOutside ? '已离开' : '区内') : '未设置' }}</small>
+        <section class="event-card">
+          <div class="telemetry-heading"><span>风险状态</span><small>实时同步</small></div>
+          <div class="event-row" :class="{ alert: runeActive }">
+            <i></i>
+            <div><strong>符文诅咒</strong><span>{{ runeStatusText }}</span></div>
+            <small class="mono">{{ runeConfidenceText }}</small>
           </div>
-          <strong class="rune-state">{{ zoneStatusText }}</strong>
-          <div class="confidence-row"><span>范围占比</span><strong class="mono">{{ zoneSizeText }}</strong></div>
-        </section>
-
-        <section class="position-card">
-          <span>玩家位置</span>
-          <strong class="mono">{{ playerText }}</strong>
-        </section>
-
-        <section class="metric-grid">
-          <div><span>队友</span><strong>{{ frame?.teammates.length || 0 }}</strong></div>
-          <div><span>其他玩家</span><strong>{{ frame?.others.length || 0 }}</strong></div>
-          <div class="fps-metric"><span>本机帧率</span><strong class="mono">{{ frame ? `${frame.sourceFPS.toFixed(1)} FPS` : '-- FPS' }}</strong></div>
+          <div class="event-row" :class="{ alert: zoneOutside }">
+            <i></i>
+            <div><strong>安全区</strong><span>{{ zoneStatusText }}</span></div>
+            <small class="mono">{{ zoneSizeText }}</small>
+          </div>
+          <div class="event-row" :class="{ alert: expStalledActive }">
+            <i></i>
+            <div><strong>经验增长</strong><span>{{ expStalledDetailText }}</span></div>
+            <small>{{ expStalledStatusText }}</small>
+          </div>
         </section>
 
         <section class="notification-card">
-          <div class="telemetry-heading"><span>Bark 推送</span><small>{{ barkSettings?.configured ? 'iPhone 已配置' : '等待配置' }}</small></div>
+          <div class="telemetry-heading"><span>告警规则</span><small>{{ barkSettings?.configured ? 'Bark 已连接' : '等待配置' }}</small></div>
           <div class="notification-rule">
             <div>
               <strong>离开安全区报警</strong>
