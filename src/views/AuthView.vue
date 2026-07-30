@@ -43,7 +43,7 @@ async function submit() {
         <div>
           <p class="eyebrow">{{ isRegister ? 'CREATE ACCOUNT' : 'WELCOME BACK' }}</p>
           <h2>{{ isRegister ? '创建监控账号' : '登录监控账号' }}</h2>
-          <p>{{ isRegister ? '使用有效邀请码注册后，即可在 AutoBuff 监控模式中登录。' : '继续管理你的远程监控会话。' }}</p>
+          <p>{{ isRegister ? '使用有效邀请码注册后，即可在 AutoBuff 客户端和监控网页登录。' : '登录后直接查看当前账号的远程监控。' }}</p>
         </div>
 
         <label>

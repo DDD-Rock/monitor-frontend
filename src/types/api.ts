@@ -9,18 +9,6 @@ export interface AuthResponse {
   user: User
 }
 
-export interface MonitorSession {
-  id: string
-  name: string
-  createdAt?: number
-}
-
-export interface CreatedMonitorSession extends MonitorSession {
-  previewToken: string
-  previewURL: string
-  publishURL: string
-}
-
 export interface ApiError {
   error: string
   message: string

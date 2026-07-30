@@ -1,6 +1,6 @@
 # AutoBuff Monitor Web
 
-Vue 3 编写的远程纯标注监控网页，包含注册、登录、监控会话管理和公开 Token 预览页面。
+Vue 3 编写的远程纯标注监控网页。登录账号后直接查看该账号客户端上报的实时监控，不再创建监控会话或使用公开 Token 链接。
 
 ## 开发
 
@@ -29,9 +29,9 @@ npm run build
 
 - `/login`：登录
 - `/register`：注册
-- `/dashboard`：创建和查看监控会话
-- `/preview/:token`：纯标注预览
-- `/preview/:token/minimal`：极简伪装页（「服务器存储监控」）
+- `/dashboard`：登录后的纯标注监控
+- `/dashboard/minimal`：需要登录的极简伪装页（「服务器存储监控」）
+- `/settings`：账号与 Bark 通知设置
 
 极简页上的黑话（磁盘、流量、写入锁定等）与真实含义的对照，见
 [极简模式黑话对照表.md](./极简模式黑话对照表.md)。

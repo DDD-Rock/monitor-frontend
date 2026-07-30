@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
-import { apiRequest } from '../api/client'
+import { useRoute, useRouter } from 'vue-router'
+import { apiRequest, getAccessToken } from '../api/client'
+import { useAuthStore } from '../stores/auth'
 import AnnotationStage from '../components/AnnotationStage.vue'
 import type { BarkSettings } from '../types/api'
 import type { Envelope, EXPPayload, FramePayload, GainPayload, MapPayload, RunePayload, Snapshot, StatusPayload, ZonePayload } from '../types/protocol'
 
 const route = useRoute()
-const token = String(route.params.token || '')
+const router = useRouter()
+const auth = useAuthStore()
 const minimalMode = computed(() => route.meta.minimal === true)
 const darkThemeKey = 'minimalDarkTheme'
 const minimalDark = ref(readStoredDarkTheme())
-const minimalPath = computed(() => `/preview/${encodeURIComponent(token)}/minimal`)
+const minimalPath = computed(() => '/dashboard/minimal')
 const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
@@ -232,8 +234,13 @@ function pushWriteSample(value: number) {
 }
 
 function connect() {
+  const accessToken = getAccessToken()
+  if (!accessToken) {
+    router.replace('/login')
+    return
+  }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  socket = new WebSocket(`${protocol}//${location.host}/ws/view?token=${encodeURIComponent(token)}`)
+  socket = new WebSocket(`${protocol}//${location.host}/ws/view?access_token=${encodeURIComponent(accessToken)}`)
   socket.onopen = () => {
     connected.value = true
     reconnectAttempt.value = 0
@@ -286,7 +293,7 @@ function scheduleReconnect() {
 
 async function loadBarkSettings() {
   try {
-    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/bark?token=${encodeURIComponent(token)}`)
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/bark')
     expStalledSeconds.value = barkSettings.value.expStalledSeconds
   } catch (caught) {
     barkError.value = caught instanceof Error ? caught.message : '通知设置读取失败'
@@ -299,7 +306,7 @@ async function toggleZoneBreach() {
   barkError.value = ''
   barkMessage.value = ''
   try {
-    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/zone-breach?token=${encodeURIComponent(token)}`, {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/zone-breach', {
       method: 'PUT',
       body: JSON.stringify({ enabled: !barkSettings.value.zoneBreachEnabled }),
     })
@@ -320,7 +327,7 @@ async function updateEXPStalled(enabled: boolean) {
   barkError.value = ''
   barkMessage.value = ''
   try {
-    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/exp-stalled?token=${encodeURIComponent(token)}`, {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/exp-stalled', {
       method: 'PUT',
       body: JSON.stringify({
         enabled,
@@ -344,7 +351,7 @@ async function toggleRuneAlert() {
   barkError.value = ''
   barkMessage.value = ''
   try {
-    barkSettings.value = await apiRequest<BarkSettings>(`/api/preview/notifications/rune-alert?token=${encodeURIComponent(token)}`, {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/rune-alert', {
       method: 'PUT',
       body: JSON.stringify({ enabled: !barkSettings.value.runeAlertEnabled }),
     })
@@ -369,7 +376,7 @@ async function testBark() {
   barkError.value = ''
   barkMessage.value = ''
   try {
-    await apiRequest(`/api/preview/notifications/bark/test?token=${encodeURIComponent(token)}`, { method: 'POST' })
+    await apiRequest('/api/notifications/bark/test', { method: 'POST' })
     barkMessage.value = '测试通知已发送'
   } catch (caught) {
     barkError.value = caught instanceof Error ? caught.message : '测试通知发送失败'
@@ -380,7 +387,7 @@ async function testBark() {
 
 async function loadGain() {
   try {
-    gain.value = await apiRequest<GainPayload>(`/api/preview/exp-gain?token=${encodeURIComponent(token)}`)
+    gain.value = await apiRequest<GainPayload>('/api/monitor/exp-gain')
   } catch {
     // WebSocket 推送仍会补上；这里失败不打扰极简页主流程。
   }
@@ -392,7 +399,7 @@ async function resetTotalPackage() {
   gainBusy.value = true
   try {
     gain.value = await apiRequest<GainPayload>(
-      `/api/preview/exp-gain/reset-total?token=${encodeURIComponent(token)}`,
+      '/api/monitor/exp-gain/reset-total',
       { method: 'POST' },
     )
   } catch (caught) {
@@ -402,7 +409,11 @@ async function resetTotalPackage() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  if (!(await auth.restore())) {
+    await router.replace('/login')
+    return
+  }
   defaultDocumentTitle = document.title
   if (minimalMode.value) {
     document.body.classList.add('minimal-monitor-mode')
@@ -552,6 +563,7 @@ onBeforeUnmount(() => {
             <span>实时状态</span>
             <div class="telemetry-heading-actions">
               <i :class="{ active: online }"></i>
+              <RouterLink class="preview-mode-link" to="/settings">设置</RouterLink>
               <RouterLink class="preview-mode-link" :to="minimalPath">极简版</RouterLink>
             </div>
           </div>
