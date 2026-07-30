@@ -31,3 +31,7 @@ npm run build
 - `/register`：注册
 - `/dashboard`：创建和查看监控会话
 - `/preview/:token`：纯标注预览
+- `/preview/:token/minimal`：极简伪装页（「服务器存储监控」）
+
+极简页上的黑话（磁盘、流量、写入锁定等）与真实含义的对照，见
+[极简模式黑话对照表.md](./极简模式黑话对照表.md)。
