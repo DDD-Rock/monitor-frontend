@@ -11,6 +11,7 @@ export interface ManagedClient {
   mode: 'dead' | 'live' | 'follow_heal' | 'monitor'
   running: boolean
   online: boolean
+  createdAt: number
   lastSeenAt: number | null
 }
 
@@ -22,6 +23,7 @@ export interface AdminUser {
   createdAt: number
   lastLoginAt: number | null
   connectedClientCount: number
+  maxClientCount: number
 }
 
 export interface AuthResponse {

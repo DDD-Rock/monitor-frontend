@@ -24,7 +24,7 @@ export const useAuthStore = defineStore('auth', () => {
             : { username, password },
         ),
       })
-      setAccessToken(response.accessToken)
+      setAccessToken(response.accessToken, response.expiresAt)
       user.value = response.user
       return response
     } finally {

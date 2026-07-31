@@ -659,6 +659,30 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .status-badge.disabled { color: #b2463b; }
 .table-actions { display: flex; gap: 8px; }
 .table-actions button { padding: 7px 10px; color: #5758c9; background: #eeeeff; font-size: 11px; }
+.client-admin-dialog { width: min(680px, calc(100% - 28px)); max-height: min(760px, calc(100vh - 40px)); padding: 0; overflow: auto; border: 0; border-radius: 22px; color: #172033; background: white; box-shadow: 0 28px 80px rgba(25, 32, 55, .28); }
+.client-admin-dialog::backdrop { background: rgba(18, 24, 39, .48); backdrop-filter: blur(3px); }
+.client-admin-dialog > header { display: flex; align-items: start; justify-content: space-between; padding: 26px 28px 16px; border-bottom: 1px solid #edf0f5; }
+.client-admin-dialog h2 { margin: 0; font-size: 24px; }
+.client-admin-dialog .portal-kicker { margin-bottom: 7px; }
+.dialog-close { width: 34px; height: 34px; border: 0; border-radius: 10px; color: #687188; background: #f1f3f7; cursor: pointer; font-size: 24px; line-height: 1; }
+.dialog-help, .limit-tip { margin: 18px 28px 0; color: #687188; font-size: 13px; }
+.client-admin-dialog > .inline-notice { margin: 16px 28px 0; }
+.client-limit-form { display: grid; grid-template-columns: 1fr 110px auto; gap: 10px; align-items: center; margin: 22px 28px 0; padding: 16px; border-radius: 14px; background: #f7f8fb; }
+.client-limit-form label { font-size: 13px; font-weight: 700; }
+.client-limit-form input { min-width: 0; padding: 9px 10px; border: 1px solid #dce1ea; border-radius: 9px; background: white; }
+.client-limit-form button, .unbind-button { padding: 9px 13px; border: 0; border-radius: 9px; color: white; background: #5b5ce2; cursor: pointer; font-weight: 700; }
+.client-limit-form button:disabled, .unbind-button:disabled { opacity: .45; cursor: not-allowed; }
+.limit-tip { margin-top: 9px; font-size: 12px; }
+.admin-client-list { display: grid; gap: 10px; padding: 22px 28px 28px; }
+.admin-client-list article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 16px; border: 1px solid #e5e9f1; border-radius: 14px; }
+.admin-client-main { display: flex; align-items: start; gap: 11px; min-width: 0; }
+.admin-client-main > div { display: grid; min-width: 0; }
+.admin-client-main small { margin-top: 3px; color: #858da0; font-size: 11px; }
+.admin-client-main code { margin-top: 7px; overflow: hidden; color: #737b8d; font-size: 10px; text-overflow: ellipsis; }
+.client-online-dot { flex: 0 0 auto; width: 9px; height: 9px; margin-top: 5px; border-radius: 50%; background: #c1c7d2; }
+.client-online-dot.online { background: #20b879; box-shadow: 0 0 0 4px #e4f8ef; }
+.unbind-button { flex: 0 0 auto; color: #b2463b; background: #fff0ee; }
+.dialog-state { margin: 22px 28px 28px; padding: 32px 20px; border: 1px dashed #d8dde7; border-radius: 14px; color: #858da0; text-align: center; }
 
 @media (max-width: 720px) {
   .portal-account em, .portal-topbar nav strong { display: none; }
@@ -666,4 +690,7 @@ body.minimal-monitor-mode.minimal-dark-theme {
   .feature-grid, .client-grid { grid-template-columns: 1fr; }
   .feature-admin { grid-column: auto; }
   .manage-heading { align-items: start; flex-direction: column; gap: 12px; }
+  .client-limit-form { grid-template-columns: 1fr 90px; }
+  .client-limit-form button { grid-column: 1 / -1; }
+  .admin-client-list article { align-items: start; }
 }
