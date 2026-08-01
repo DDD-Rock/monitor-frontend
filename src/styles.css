@@ -627,8 +627,8 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .live-summary { padding: 9px 13px; border-radius: 99px; color: #8a93a6; background: #e9edf3; font-size: 12px; font-weight: 700; }
 .live-summary.active { color: #137a52; background: #dcf8ea; }
 .inline-notice { padding: 12px 16px; border-radius: 12px; color: #9d3d35; background: #fff0ee; }
-.client-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
-.client-card { padding: 25px; border: 1px solid #e2e6ef; border-radius: 20px; background: white; box-shadow: 0 10px 30px rgba(28,39,71,.05); }
+.client-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.client-card { min-height: 92px; padding: 18px 20px; display: grid; grid-template-columns: minmax(240px, 1.4fr) minmax(250px, .9fr) auto; gap: 24px; align-items: center; border: 1px solid #e2e6ef; border-radius: 16px; background: white; box-shadow: 0 7px 24px rgba(28,39,71,.045); }
 .client-card-head { display: grid; grid-template-columns: auto 1fr auto; gap: 13px; align-items: center; }
 .device-orb { display: grid; width: 44px; height: 44px; place-items: center; border-radius: 14px; color: #81899a; background: #eef1f5; }
 .device-orb.online { color: #5657d9; background: #eeeeff; }
@@ -636,15 +636,15 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .client-card-head p { margin: 0; color: #8991a2; font-size: 11px; }
 .client-card-head i { width: 8px; height: 8px; border-radius: 50%; background: #bbc1cd; }
 .client-card-head i.online { background: #25bc78; box-shadow: 0 0 0 4px #e3f8ee; }
-.client-card dl { display: grid; grid-template-columns: 1fr 1fr; margin: 24px 0; border-block: 1px solid #edf0f5; }
-.client-card dl div { padding: 16px 0; }
+.client-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 0; padding: 0 24px; border-inline: 1px solid #edf0f5; }
+.client-card dl div { padding: 7px 0; }
 .client-card dt { color: #949bad; font-size: 11px; }
 .client-card dd { margin: 5px 0 0; font-size: 14px; font-weight: 700; }
 .client-card dd.running { color: #15915f; }
-.client-actions { display: flex; justify-content: space-between; align-items: center; }
-.client-actions a { color: #6465d9; font-size: 12px; text-decoration: none; }
+.client-actions { display: flex; justify-content: flex-end; align-items: center; gap: 9px; }
 .client-actions button, .table-actions button { padding: 8px 15px; border: 0; border-radius: 9px; color: white; background: #5b5ce2; cursor: pointer; font-weight: 700; }
-.client-actions button.stop, .table-actions button.danger { color: #b2463b; background: #fff0ee; }
+.client-actions button.stop { color: #5b43b6; background: #eee9ff; }
+.client-actions button.danger, .table-actions button.danger { color: #b2463b; background: #fff0ee; }
 .client-actions button:disabled, .table-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .empty-portal { padding: 80px 20px; text-align: center; border: 1px dashed #d8dde7; border-radius: 24px; background: white; }
 .empty-portal span { font-size: 34px; color: #7475df; }
@@ -684,6 +684,12 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .unbind-button { flex: 0 0 auto; color: #b2463b; background: #fff0ee; }
 .dialog-state { margin: 22px 28px 28px; padding: 32px 20px; border: 1px dashed #d8dde7; border-radius: 14px; color: #858da0; text-align: center; }
 
+@media (max-width: 900px) {
+  .client-card { grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; }
+  .client-card dl { grid-column: 1 / -1; grid-row: 2; padding: 14px 0 0; border-inline: 0; border-top: 1px solid #edf0f5; }
+  .client-actions { grid-column: 2; grid-row: 1; }
+}
+
 @media (max-width: 720px) {
   .portal-account em, .portal-topbar nav strong { display: none; }
   .portal-content { width: min(100% - 28px, 1120px); padding-top: 48px; }
@@ -693,4 +699,8 @@ body.minimal-monitor-mode.minimal-dark-theme {
   .client-limit-form { grid-template-columns: 1fr 90px; }
   .client-limit-form button { grid-column: 1 / -1; }
   .admin-client-list article { align-items: start; }
+  .client-card { grid-template-columns: 1fr; gap: 16px; padding: 18px; }
+  .client-card dl { grid-column: auto; grid-row: auto; padding: 14px 0; border-inline: 0; border-block: 1px solid #edf0f5; }
+  .client-actions { grid-column: auto; grid-row: auto; justify-content: stretch; }
+  .client-actions button { flex: 1; }
 }

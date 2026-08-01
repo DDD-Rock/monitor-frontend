@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getAccessToken } from '../api/client'
+import { apiRequest, getAccessToken } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import type { ManagedClient } from '../types/api'
 
@@ -11,10 +11,14 @@ const clients = ref<ManagedClient[]>([])
 const connected = ref(false)
 const error = ref('')
 const pending = ref(new Set<string>())
+const deletingClientID = ref<string | null>(null)
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
 
 const onlineCount = computed(() => clients.value.filter((item) => item.online).length)
+const activeMonitorClientID = computed(() => clients.value.find(
+  (item) => item.online && item.mode === 'monitor' && item.running,
+)?.clientId ?? null)
 const modeNames: Record<ManagedClient['mode'], string> = {
   dead: '死花模式',
   live: '活花模式',
@@ -43,13 +47,36 @@ function connect() {
 }
 
 function control(client: ManagedClient) {
-  if (!socket || socket.readyState !== WebSocket.OPEN || !client.online) return
+  if (!socket || socket.readyState !== WebSocket.OPEN || !client.online || startBlocked(client)) return
   pending.value = new Set(pending.value).add(client.clientId)
   socket.send(JSON.stringify({
     type: 'command',
     clientId: client.clientId,
     action: client.running ? 'stop' : 'start',
   }))
+}
+
+function startBlocked(client: ManagedClient) {
+  return !client.running && client.mode === 'monitor' &&
+    activeMonitorClientID.value !== null && activeMonitorClientID.value !== client.clientId
+}
+
+async function deleteClient(client: ManagedClient) {
+  const warning = client.online
+    ? '该客户端当前在线。解绑后会立即停止功能并退出登录，确定继续吗？'
+    : '该客户端当前离线。解绑后下次上线会自动退出登录，确定继续吗？'
+  if (!confirm(`确定解绑“${client.name}”吗？\n\n${warning}`)) return
+
+  deletingClientID.value = client.id
+  error.value = ''
+  try {
+    await apiRequest(`/api/clients/${client.id}`, { method: 'DELETE' })
+    clients.value = clients.value.filter((item) => item.id !== client.id)
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : '解绑客户端失败'
+  } finally {
+    deletingClientID.value = null
+  }
 }
 
 function formatLastSeen(value: number | null) {
@@ -91,9 +118,11 @@ onBeforeUnmount(() => {
           </div>
           <dl><div><dt>当前模式</dt><dd>{{ modeNames[client.mode] }}</dd></div><div><dt>运行状态</dt><dd :class="{ running: client.running }">{{ client.running ? '运行中' : '已停止' }}</dd></div></dl>
           <div class="client-actions">
-            <RouterLink :to="{ path: '/dashboard', query: { client: client.clientId } }">查看监控</RouterLink>
-            <button :class="{ stop: client.running }" :disabled="!client.online || pending.has(client.clientId)" @click="control(client)">
-              {{ pending.has(client.clientId) ? '等待客户端…' : client.running ? '停止' : '开始' }}
+            <button :class="{ stop: client.running }" :disabled="!client.online || pending.has(client.clientId) || deletingClientID === client.id || startBlocked(client)" :title="startBlocked(client) ? '同一账号只能有一个客户端运行监控模式' : ''" @click="control(client)">
+              {{ pending.has(client.clientId) ? '等待客户端…' : startBlocked(client) ? '其他客户端监控中' : client.running ? '停止' : '开始' }}
+            </button>
+            <button class="danger" :disabled="deletingClientID === client.id" @click="deleteClient(client)">
+              {{ deletingClientID === client.id ? '解绑中…' : '解绑客户端' }}
             </button>
           </div>
         </article>

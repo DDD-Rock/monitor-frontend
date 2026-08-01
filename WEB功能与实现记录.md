@@ -134,7 +134,7 @@ WHERE username = 'your_admin_username';
 
 - 所有登录用户可见。
 - 进入当前账号的客户端列表。
-- 支持查看状态、进入指定客户端监控以及远程开始/停止。
+- 使用纵向单列卡片查看状态，并支持远程开始、停止和解绑；监控入口统一保留在功能中心。
 
 ### 5.3 用户管理
 
@@ -443,6 +443,7 @@ PUT /api/admin/users/{id}/password
 | `POST` | `/api/auth/register` | 注册 | 游客 |
 | `GET` | `/api/auth/me` | 恢复当前用户 | 登录用户 |
 | `GET` | `/api/clients` | 获取客户端列表的 HTTP 版本 | 登录用户 |
+| `DELETE` | `/api/clients/{sessionId}` | 解绑当前账号自己的客户端 | 登录用户 |
 | `GET` | `/api/admin/users` | 获取所有用户 | 超级管理员 |
 | `PATCH` | `/api/admin/users/{id}/status` | 封禁或解封 | 超级管理员 |
 | `PUT` | `/api/admin/users/{id}/password` | 修改用户密码 | 超级管理员 |
