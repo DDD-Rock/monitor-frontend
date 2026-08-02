@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', () => {
     username: string,
     password: string,
     inviteCode = '',
+    nickname = '',
   ) {
     loading.value = true
     try {
@@ -20,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
         method: 'POST',
         body: JSON.stringify(
           mode === 'register'
-            ? { username, password, inviteCode }
+            ? { username, nickname, password, inviteCode }
             : { username, password },
         ),
       })

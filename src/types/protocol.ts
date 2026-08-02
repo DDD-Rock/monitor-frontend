@@ -47,12 +47,20 @@ export interface EXPPayload {
   currentEXP: number | null
   percent: number | null
   confidence: number | null
+  recognitionMethod?: 'ppOCRv4' | 'fixedTemplate'
   status: string
   recognizedAt: number
 }
 
 /** 本机对「符文诅咒提示横幅」的识别结果。 */
 export interface RunePayload {
+  detected: boolean
+  confidence: number | null
+  detectedAt: number
+}
+
+/** 本机对「寻找透明图形」鼠标跟随验证弹窗的识别结果。 */
+export interface VerificationPayload {
   detected: boolean
   confidence: number | null
   detectedAt: number
@@ -86,7 +94,7 @@ export interface GainPayload {
 }
 
 export interface Envelope<T = unknown> {
-  type: 'map' | 'frame' | 'status' | 'exp' | 'rune' | 'zone' | 'gain'
+  type: 'map' | 'frame' | 'status' | 'exp' | 'rune' | 'verification' | 'zone' | 'gain'
   sequence: number
   payload: T
 }
@@ -99,6 +107,7 @@ export interface Snapshot {
   status?: StatusPayload
   exp?: EXPPayload
   rune?: RunePayload
+  verification?: VerificationPayload
   zone?: ZonePayload
   gain?: GainPayload
   updatedAt: number

@@ -2,6 +2,8 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiRequest } from '../api/client'
+import BackButton from '../components/BackButton.vue'
+import LogoMark from '../components/LogoMark.vue'
 import { useAuthStore } from '../stores/auth'
 import type { AdminUser, ManagedClient } from '../types/api'
 
@@ -24,7 +26,7 @@ async function load() {
 }
 
 async function toggleStatus(user: AdminUser) {
-  if (!confirm(`确定要${user.status ? '封禁' : '解封'}用户“${user.username}”吗？`)) return
+  if (!confirm(`确定要${user.status ? '封禁' : '解封'}用户“${user.nickname}”吗？`)) return
   busyID.value = user.id
   try {
     await apiRequest(`/api/admin/users/${user.id}/status`, {
@@ -37,7 +39,7 @@ async function toggleStatus(user: AdminUser) {
 }
 
 async function resetPassword(user: AdminUser) {
-  const password = prompt(`为“${user.username}”设置新密码（8–72 位）：`)
+  const password = prompt(`为“${user.nickname}”设置新密码（8–72 位）：`)
   if (password === null) return
   if (password.length < 8 || password.length > 72) {
     error.value = '密码长度须为 8–72 位'
@@ -133,8 +135,8 @@ onMounted(async () => {
 <template>
   <main class="portal-shell">
     <header class="portal-topbar">
-      <RouterLink class="portal-logo" to="/functions"><span>A</span>AutoBuff</RouterLink>
-      <nav><RouterLink to="/functions">功能中心</RouterLink><strong>用户管理</strong></nav>
+      <div class="portal-topbar-start"><BackButton /><RouterLink class="portal-logo" to="/functions"><LogoMark />AutoBuff</RouterLink></div>
+      <nav><RouterLink to="/functions">功能中心</RouterLink><RouterLink to="/manual">使用手册</RouterLink><strong>用户管理</strong></nav>
     </header>
     <section class="portal-content manage-content">
       <div class="manage-heading"><div><p class="portal-kicker">ADMIN</p><h1>用户管理</h1></div></div>
@@ -144,7 +146,7 @@ onMounted(async () => {
           <thead><tr><th>用户</th><th>身份</th><th>状态</th><th>客户端</th><th>最近登录</th><th>操作</th></tr></thead>
           <tbody>
             <tr v-for="user in users" :key="user.id">
-              <td><strong>{{ user.username }}</strong><small>#{{ user.id }}</small></td>
+              <td><strong>{{ user.nickname }}</strong><small>#{{ user.id }}</small></td>
               <td><span v-if="user.isSuperAdmin" class="admin-badge">超级管理员</span><span v-else>普通用户</span></td>
               <td><span class="status-badge" :class="{ disabled: !user.status }">{{ user.status ? '正常' : '已封禁' }}</span></td>
               <td>{{ user.connectedClientCount }} / {{ user.maxClientCount }}</td>
@@ -164,7 +166,7 @@ onMounted(async () => {
       <header>
         <div>
           <p class="portal-kicker">CLIENT ACCESS</p>
-          <h2>{{ selectedUser?.username }} 的客户端</h2>
+          <h2>{{ selectedUser?.nickname }} 的客户端</h2>
         </div>
         <button class="dialog-close" aria-label="关闭" @click="clientDialog?.close()">×</button>
       </header>

@@ -1,6 +1,6 @@
 export interface User {
   id: number
-  username: string
+  nickname: string
   isSuperAdmin: boolean
 }
 
@@ -8,16 +8,33 @@ export interface ManagedClient {
   id: string
   clientId: string
   name: string
-  mode: 'dead' | 'live' | 'follow_heal' | 'monitor'
+  roleName: string
+  mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor'
   running: boolean
   online: boolean
   createdAt: number
   lastSeenAt: number | null
 }
 
+export interface RopeTeamMember {
+  sessionId: string
+  clientId: string
+  name: string
+  roleName: string
+  isLeader: boolean
+  joined: boolean
+  online: boolean
+}
+
+export interface RopeTeam {
+  id: number
+  leaderSessionId: string
+  members: RopeTeamMember[]
+}
+
 export interface AdminUser {
   id: number
-  username: string
+  nickname: string
   status: 0 | 1
   isSuperAdmin: boolean
   createdAt: number
@@ -26,10 +43,36 @@ export interface AdminUser {
   maxClientCount: number
 }
 
+export interface AdminInviteCode {
+  id: number
+  code: string
+  createdAt: number
+  expiresAt: number
+  usedAt: number | null
+  createdByNickname: string
+  usedByNickname?: string
+}
+
 export interface AuthResponse {
   accessToken: string
   expiresAt: number
   user: User
+}
+
+export interface CloudMapSummary {
+  id: number
+  name: string
+  size: number
+  updatedAt: number
+  uploadedBy: string
+}
+
+export interface ClientVersionPolicy {
+  platform: 'macos' | 'windows'
+  version: string
+  enabled: boolean
+  createdAt: number
+  updatedAt: number
 }
 
 export interface ApiError {
@@ -39,10 +82,13 @@ export interface ApiError {
 
 export interface BarkSettings {
   configured: boolean
+  urgentAlertsMuted: boolean
   expStalledEnabled: boolean
   expStalledSeconds: number
   runeAlertEnabled: boolean
   runeAlertIntervalSeconds: number
+  mouseFollowVerificationEnabled: boolean
+  mouseFollowVerificationIntervalSeconds: number
   zoneBreachEnabled: boolean
   zoneBreachIntervalSeconds: number
   barkServerURL: string

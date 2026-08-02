@@ -2,6 +2,8 @@
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { apiRequest } from '../api/client'
+import BackButton from '../components/BackButton.vue'
+import LogoMark from '../components/LogoMark.vue'
 import { useAuthStore } from '../stores/auth'
 import type { BarkSettings } from '../types/api'
 
@@ -12,6 +14,7 @@ const barkDeviceKey = ref('')
 const barkBusy = ref(false)
 const barkMessage = ref('')
 const barkError = ref('')
+const criticalVolume = ref(5)
 
 onMounted(async () => {
   if (!(await auth.restore())) {
@@ -57,6 +60,24 @@ async function testBark() {
   }
 }
 
+async function testCriticalBark() {
+	criticalVolume.value = Math.min(10, Math.max(0, Number(criticalVolume.value) || 0))
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    await apiRequest('/api/notifications/bark/test-critical', {
+      method: 'POST',
+      body: JSON.stringify({ volume: criticalVolume.value }),
+    })
+    barkMessage.value = `紧急测试通知已发送，音量 ${criticalVolume.value}`
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '紧急测试通知发送失败'
+  } finally {
+    barkBusy.value = false
+  }
+}
+
 function logout() {
   auth.logout()
   router.replace('/login')
@@ -66,9 +87,10 @@ function logout() {
 <template>
   <main class="app-shell">
     <header class="topbar">
-      <div class="brand-row"><span class="mini-mark">A</span><strong>AutoBuff Monitor</strong></div>
+      <div class="topbar-start"><BackButton fallback="/dashboard" /><div class="brand-row"><LogoMark class="mini-mark" /><strong>AutoBuff Monitor</strong></div></div>
       <div class="user-row">
-        <span>{{ auth.user?.username }}</span>
+        <span>{{ auth.user?.nickname }}</span>
+        <RouterLink class="text-button" to="/manual">使用手册</RouterLink>
         <RouterLink class="text-button" to="/functions">功能中心</RouterLink>
         <RouterLink class="text-button" to="/dashboard">返回监控</RouterLink>
         <button class="text-button" @click="logout">退出</button>
@@ -102,6 +124,12 @@ function logout() {
         <div class="button-row">
           <button class="primary-button" :disabled="barkBusy || !barkDeviceKey" @click="saveBark">{{ barkBusy ? '处理中…' : '保存配置' }}</button>
           <button class="secondary-button" :disabled="barkBusy || !barkSettings?.configured" @click="testBark">发送测试</button>
+        </div>
+        <div class="critical-test-controls">
+          <label>紧急通知音量 <input v-model.number="criticalVolume" type="number" min="0" max="10" step="1" /></label>
+          <button class="critical-test-button" :disabled="barkBusy || !barkSettings?.configured" @click="testCriticalBark">
+            发送紧急测试通知
+          </button>
         </div>
       </article>
     </section>

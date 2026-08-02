@@ -4,8 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { apiRequest, getAccessToken } from '../api/client'
 import { useAuthStore } from '../stores/auth'
 import AnnotationStage from '../components/AnnotationStage.vue'
+import BackButton from '../components/BackButton.vue'
+import LogoMark from '../components/LogoMark.vue'
 import type { BarkSettings } from '../types/api'
-import type { Envelope, EXPPayload, FramePayload, GainPayload, MapPayload, RunePayload, Snapshot, StatusPayload, ZonePayload } from '../types/protocol'
+import type { Envelope, EXPPayload, FramePayload, GainPayload, MapPayload, RunePayload, Snapshot, StatusPayload, VerificationPayload, ZonePayload } from '../types/protocol'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +15,8 @@ const auth = useAuthStore()
 const minimalMode = computed(() => route.meta.minimal === true)
 const darkThemeKey = 'minimalDarkTheme'
 const minimalDark = ref(readStoredDarkTheme())
+const standardFaviconURL = '/favicon.svg'
+const disguisedFaviconURL = 'data:,'
 const minimalPath = computed(() => ({
   path: '/dashboard/minimal',
   query: route.query.client ? { client: route.query.client } : {},
@@ -21,6 +25,7 @@ const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
 const rune = ref<RunePayload | null>(null)
+const verification = ref<VerificationPayload | null>(null)
 const zone = ref<ZonePayload | null>(null)
 const gain = ref<GainPayload | null>(null)
 const gainBusy = ref(false)
@@ -32,6 +37,7 @@ const barkSettings = ref<BarkSettings | null>(null)
 const barkBusy = ref(false)
 const barkMessage = ref('')
 const barkError = ref('')
+const criticalVolume = ref(5)
 const expStalledSeconds = ref(120)
 const cpuSamples = ref([18, 21, 19, 24, 27, 25, 31, 29, 33, 28, 26, 30, 34, 32, 29, 35, 31, 27])
 // 真实数据：每 5 秒采一次 EXP，存的是这 5 秒的增量，伪装成磁盘写入速率。
@@ -55,6 +61,11 @@ const expValueText = computed(() => exp.value?.currentEXP == null ? '--' : exp.v
 const diskUsageText = computed(() => exp.value?.currentEXP == null ? '--' : `${expValueText.value} MB`)
 const expPercentText = computed(() => exp.value?.percent == null ? '--%' : `${formatPercent(exp.value.percent)}%`)
 const expConfidenceText = computed(() => exp.value?.confidence == null ? '--' : `${Math.round(exp.value.confidence * 100)}%`)
+const expRecognitionMethodText = computed(() => {
+  if (exp.value?.recognitionMethod === 'ppOCRv4') return 'PP-OCRv4'
+  if (exp.value?.recognitionMethod === 'fixedTemplate') return '模板回退'
+  return exp.value?.currentEXP == null ? '--' : '旧版客户端未上报'
+})
 const cpuUsageText = computed(() => `${cpuSamples.value.at(-1) || 0}%`)
 const cpuLoadText = computed(() => (((cpuSamples.value.at(-1) || 0) / 100) * 1.6).toFixed(2))
 const cpuPoints = computed(() => cpuSamples.value.map((value, index) => {
@@ -90,6 +101,16 @@ const runeStatusText = computed(() => {
 const runeConfidenceText = computed(() =>
   runeActive.value && rune.value?.confidence != null
     ? `${Math.round(rune.value.confidence * 100)}%`
+    : '--',
+)
+const verificationActive = computed(() => online.value && verification.value?.detected === true)
+const verificationStatusText = computed(() => {
+  if (!online.value) return '等待本机上线'
+  return verificationActive.value ? '出现鼠标跟随验证，请立即人工处理' : '未出现验证弹窗'
+})
+const verificationConfidenceText = computed(() =>
+  verificationActive.value && verification.value?.confidence != null
+    ? `${Math.round(verification.value.confidence * 100)}%`
     : '--',
 )
 // rect 为空表示本机没有配置安全区，此时既不画框也不报警。
@@ -156,10 +177,27 @@ watch(
 watch(minimalMode, (enabled) => {
   document.body.classList.toggle('minimal-monitor-mode', enabled)
   applyMinimalTheme()
+  applyFavicon(enabled)
   if (defaultDocumentTitle) document.title = enabled ? '服务器存储监控' : defaultDocumentTitle
   if (enabled) startMinimalCharts()
   else stopMinimalCharts()
 })
+
+function applyFavicon(disguised: boolean) {
+  let favicon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]')
+  if (!favicon) {
+    favicon = document.createElement('link')
+    favicon.rel = 'icon'
+    document.head.appendChild(favicon)
+  }
+  if (disguised) {
+    favicon.removeAttribute('type')
+    favicon.href = disguisedFaviconURL
+  } else {
+    favicon.type = 'image/svg+xml'
+    favicon.href = standardFaviconURL
+  }
+}
 
 // 隐私模式下 localStorage 会抛异常，读写都不能让它把页面带崩。
 function readStoredDarkTheme() {
@@ -300,6 +338,7 @@ function applyMessage(message: Snapshot | Envelope) {
     if (message.exp) exp.value = message.exp
     else status.value = message.online ? '本机监控在线' : '本机监控离线'
     if (message.rune) rune.value = message.rune
+    if (message.verification) verification.value = message.verification
     if (message.zone) zone.value = message.zone
     if (message.gain) gain.value = message.gain
     return
@@ -313,6 +352,7 @@ function applyMessage(message: Snapshot | Envelope) {
   }
   if (message.type === 'exp') exp.value = message.payload as EXPPayload
   if (message.type === 'rune') rune.value = message.payload as RunePayload
+  if (message.type === 'verification') verification.value = message.payload as VerificationPayload
   if (message.type === 'zone') zone.value = message.payload as ZonePayload
   if (message.type === 'gain') gain.value = message.payload as GainPayload
 }
@@ -401,6 +441,46 @@ async function toggleRuneAlert() {
   }
 }
 
+async function toggleMouseFollowVerification() {
+  if (!barkSettings.value?.configured || barkBusy.value) return
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/mouse-follow-verification', {
+      method: 'PUT',
+      body: JSON.stringify({ enabled: !barkSettings.value.mouseFollowVerificationEnabled }),
+    })
+    barkMessage.value = barkSettings.value.mouseFollowVerificationEnabled
+      ? `鼠标跟随验证紧急推送已开启，出现后每 ${barkSettings.value.mouseFollowVerificationIntervalSeconds} 秒提醒一次`
+      : '鼠标跟随验证紧急推送已关闭'
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '鼠标跟随验证开关更新失败'
+  } finally {
+    barkBusy.value = false
+  }
+}
+
+async function toggleUrgentMute() {
+  if (!barkSettings.value?.configured || barkBusy.value) return
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    barkSettings.value = await apiRequest<BarkSettings>('/api/notifications/urgent-mute', {
+      method: 'PUT',
+      body: JSON.stringify({ muted: !barkSettings.value.urgentAlertsMuted }),
+    })
+    barkMessage.value = barkSettings.value.urgentAlertsMuted
+      ? '符文和鼠标跟随紧急警报已静音'
+      : '紧急警报声音已开启，每次事件第一次音量为 4'
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '紧急警报静音设置更新失败'
+  } finally {
+    barkBusy.value = false
+  }
+}
+
 async function saveEXPStalledSeconds() {
   if (!barkSettings.value) return
   await updateEXPStalled(barkSettings.value.expStalledEnabled)
@@ -416,6 +496,25 @@ async function testBark() {
     barkMessage.value = '测试通知已发送'
   } catch (caught) {
     barkError.value = caught instanceof Error ? caught.message : '测试通知发送失败'
+  } finally {
+    barkBusy.value = false
+  }
+}
+
+async function testCriticalBark() {
+	if (!barkSettings.value?.configured || barkBusy.value) return
+	criticalVolume.value = Math.min(10, Math.max(0, Number(criticalVolume.value) || 0))
+  barkBusy.value = true
+  barkError.value = ''
+  barkMessage.value = ''
+  try {
+    await apiRequest('/api/notifications/bark/test-critical', {
+      method: 'POST',
+      body: JSON.stringify({ volume: criticalVolume.value }),
+    })
+    barkMessage.value = `紧急测试通知已发送，音量 ${criticalVolume.value}`
+  } catch (caught) {
+    barkError.value = caught instanceof Error ? caught.message : '紧急测试通知发送失败'
   } finally {
     barkBusy.value = false
   }
@@ -454,6 +553,7 @@ onMounted(async () => {
   if (minimalMode.value) {
     document.body.classList.add('minimal-monitor-mode')
     document.title = '服务器存储监控'
+    applyFavicon(true)
     applyMinimalTheme()
     startMinimalCharts()
   }
@@ -465,6 +565,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.body.classList.remove('minimal-monitor-mode')
   document.body.classList.remove('minimal-dark-theme')
+  applyFavicon(false)
   if (defaultDocumentTitle) document.title = defaultDocumentTitle
   stopMinimalCharts()
   stopDataSampling()
@@ -517,6 +618,7 @@ onBeforeUnmount(() => {
     <section>
       <p>磁盘使用量：{{ diskUsageText }}</p>
       <p>磁盘使用率：{{ expPercentText }}</p>
+      <p>数据识别方式：{{ expRecognitionMethodText }}</p>
       <p>流入流量：{{ inflowText }}</p>
       <p>流出流量：{{ outflowText }}</p>
       <p>总资源包用量：{{ totalPackageText }}</p>
@@ -525,6 +627,7 @@ onBeforeUnmount(() => {
         {{ gainBusy ? '处理中…' : '清空总资源包用量' }}
       </button>
       <p>写入锁定：{{ online ? (runeActive ? '已锁定' : '正常') : '等待节点上线' }}</p>
+      <p>交互验证：{{ online ? (verificationActive ? '需要处理' : '正常') : '等待节点上线' }}</p>
       <p>
         分区越界：{{ zoneConfigured ? (online ? (zoneOutside ? '已越界' : '正常') : '等待节点上线') : '未划分区' }}
       </p>
@@ -533,6 +636,15 @@ onBeforeUnmount(() => {
 
     <section>
       <p>告警通道：{{ barkSettings?.configured ? '已连接' : '等待连接' }}</p>
+      <label class="minimal-row">
+        <input
+          type="checkbox"
+          :checked="barkSettings?.mouseFollowVerificationEnabled"
+          :disabled="barkBusy || !barkSettings?.configured"
+          @change="toggleMouseFollowVerification"
+        />
+        <span>交互验证紧急告警</span>
+      </label>
       <label class="minimal-row">
         <input
           type="checkbox"
@@ -585,17 +697,21 @@ onBeforeUnmount(() => {
 
   <main v-else class="preview-shell">
     <header class="preview-topbar">
-      <div class="preview-brand">
-        <span class="preview-brand-mark">A</span>
-        <div>
-          <strong>AutoBuff Monitor</strong>
-          <span>实时作业中心</span>
+      <div class="preview-topbar-start">
+        <BackButton />
+        <div class="preview-brand">
+          <LogoMark class="preview-brand-mark" />
+          <div>
+            <strong>AutoBuff Monitor</strong>
+            <span>实时作业中心</span>
+          </div>
         </div>
       </div>
       <div class="preview-topbar-actions">
         <span class="connection-pill" :class="{ online }">
           <i></i>{{ online ? '本机在线' : connected ? '等待本机' : '连接中' }}
         </span>
+        <RouterLink class="preview-nav-link" to="/manual">使用手册</RouterLink>
         <RouterLink class="preview-nav-link" to="/functions">功能中心</RouterLink>
         <RouterLink class="preview-nav-link" to="/settings">设置</RouterLink>
         <RouterLink class="preview-nav-link" :to="minimalPath">极简模式</RouterLink>
@@ -631,7 +747,7 @@ onBeforeUnmount(() => {
           <div class="performance-metric primary-metric">
             <span>当前经验</span>
             <strong class="mono">{{ expValueText }}</strong>
-            <small>识别置信度 {{ expConfidenceText }}</small>
+            <small>{{ expRecognitionMethodText }} · 置信度 {{ expConfidenceText }}</small>
           </div>
           <div class="performance-metric">
             <span>当前进度</span>
@@ -686,6 +802,11 @@ onBeforeUnmount(() => {
 
         <section class="event-card">
           <div class="telemetry-heading"><span>风险状态</span><small>实时同步</small></div>
+          <div class="event-row" :class="{ alert: verificationActive }">
+            <i></i>
+            <div><strong>鼠标跟随验证</strong><span>{{ verificationStatusText }}</span></div>
+            <small class="mono">{{ verificationConfidenceText }}</small>
+          </div>
           <div class="event-row" :class="{ alert: runeActive }">
             <i></i>
             <div><strong>符文诅咒</strong><span>{{ runeStatusText }}</span></div>
@@ -707,6 +828,33 @@ onBeforeUnmount(() => {
           <div class="telemetry-heading"><span>告警规则</span><small>{{ barkSettings?.configured ? 'Bark 已连接' : '等待配置' }}</small></div>
           <div class="notification-rule">
             <div>
+              <strong>符文 / 鼠标跟随静音</strong>
+              <span>开启后整段事件都静音；关闭时每次事件仅第一次以音量 4 提醒</span>
+            </div>
+            <button
+              class="toggle-button"
+              :class="{ active: barkSettings?.urgentAlertsMuted }"
+              :disabled="barkBusy || !barkSettings?.configured"
+              :aria-pressed="barkSettings?.urgentAlertsMuted"
+              aria-label="符文和鼠标跟随紧急警报静音"
+              @click="toggleUrgentMute"
+            ><span></span></button>
+          </div>
+          <div class="notification-rule">
+            <div>
+              <strong>鼠标跟随验证紧急推送</strong>
+              <span>紧急通知；首次音量 {{ barkSettings?.urgentAlertsMuted ? 0 : 4 }}，之后音量 0，每 {{ barkSettings?.mouseFollowVerificationIntervalSeconds ?? 5 }} 秒重复</span>
+            </div>
+            <button
+              class="toggle-button"
+              :class="{ active: barkSettings?.mouseFollowVerificationEnabled }"
+              :disabled="barkBusy || !barkSettings?.configured"
+              :aria-pressed="barkSettings?.mouseFollowVerificationEnabled"
+              @click="toggleMouseFollowVerification"
+            ><span></span></button>
+          </div>
+          <div class="notification-rule">
+            <div>
               <strong>离开安全区报警</strong>
               <span>角色跑出矩形范围后每 {{ barkSettings?.zoneBreachIntervalSeconds ?? 5 }} 秒提醒一次，直到回到范围内</span>
             </div>
@@ -721,7 +869,7 @@ onBeforeUnmount(() => {
           <div class="notification-rule">
             <div>
               <strong>符文提示推送</strong>
-              <span>出现紫色符文提示后每 {{ barkSettings?.runeAlertIntervalSeconds ?? 5 }} 秒提醒一次，直到解除</span>
+              <span>紧急通知；首次音量 {{ barkSettings?.urgentAlertsMuted ? 0 : 4 }}，之后音量 0，每 {{ barkSettings?.runeAlertIntervalSeconds ?? 5 }} 秒重复</span>
             </div>
             <button
               class="toggle-button"
@@ -763,6 +911,12 @@ onBeforeUnmount(() => {
           <button class="notification-test" :disabled="barkBusy || !barkSettings?.configured" @click="testBark">
             {{ barkBusy ? '处理中…' : '发送测试通知' }}
           </button>
+          <div class="critical-test-controls compact">
+            <label>紧急音量 <input v-model.number="criticalVolume" type="number" min="0" max="10" step="1" /></label>
+            <button class="notification-test critical" :disabled="barkBusy || !barkSettings?.configured" @click="testCriticalBark">
+              {{ barkBusy ? '处理中…' : '发送紧急测试通知' }}
+            </button>
+          </div>
         </section>
       </aside>
     </section>

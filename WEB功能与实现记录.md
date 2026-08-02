@@ -62,6 +62,8 @@ Web 端已经从“登录后直接进入单一监控页”升级为多功能控�
 | `/functions` | 功能中心 | 登录用户 | 已完成 |
 | `/clients` | 客户端管理 | 登录用户 | 已完成 |
 | `/admin/users` | 用户管理 | 超级管理员 | 已完成 |
+| `/admin/invite-codes` | 一次性限时邀请码管理 | 超级管理员 | 已完成 |
+| `/admin/maps` | 云端地图管理 | 超级管理员 | 已完成 |
 | `/dashboard` | 标准远程监控 | 登录用户 | 已完成 |
 | `/dashboard/minimal` | 极简伪装监控 | 登录用户 | 已完成 |
 | `/settings` | Bark 通知设置 | 登录用户 | 已完成 |
@@ -74,7 +76,7 @@ Web 端已经从“登录后直接进入单一监控页”升级为多功能控�
 
 ### 4.1 登录
 
-- 用户名和密码通过 `POST /api/auth/login` 提交。
+- 用户名和密码通过 `POST /api/auth/login` 提交；登录后的界面只展示昵称。
 - 登录成功后将 JWT 保存到 `sessionStorage`。
 - 当前标签页关闭后登录状态自动清除。
 - 登录成功默认进入 `/functions`。
@@ -84,8 +86,9 @@ Web 端已经从“登录后直接进入单一监控页”升级为多功能控�
 
 - 注册接口：`POST /api/auth/register`。
 - 用户名限制为 3–32 位字母、数字或下划线。
+- 昵称限制为 1–24 个字符，用于网页和客户端展示。
 - 密码限制为 8–72 位。
-- 需要邀请码，当前服务端邀请码为 `XIAOXIN`，忽略大小写和首尾空格。
+- 需要超级管理员在网页生成的一次性限时邀请码，使用后立即核销；服务端忽略大小写和首尾空格。
 - 服务端可通过 `ALLOW_REGISTRATION` 关闭注册。
 
 ### 4.3 超级管理员
@@ -95,7 +98,7 @@ Web 端已经从“登录后直接进入单一监控页”升级为多功能控�
 ```ts
 interface User {
   id: number
-  username: string
+  nickname: string
   isSuperAdmin: boolean
 }
 ```
@@ -143,7 +146,17 @@ WHERE username = 'your_admin_username';
 - 普通用户直接访问 `/admin/users` 会被页面送回功能中心，同时后端接口仍会返回
   `403`。
 
+### 5.4 地图管理
+
+- 仅 `isSuperAdmin === true` 时显示功能入口。
+- 支持查看地图名称、大小、上传者昵称和更新时间，并按需渲染地图结构预览。
+- 支持上传客户端导出的 JSON、下载单张地图和删除云端地图。
+- 普通用户直接访问 `/admin/maps` 会被送回功能中心，后端接口仍会返回 `403`。
+
 ## 6. 客户端管理
+
+- 每个账号只允许保存一个挂绳队伍；已有队伍时入口显示“修改队伍”。
+- 已创建的队伍支持“解散队伍”。确认后服务端仅向在线队长发送解散指令，队长客户端在游戏聊天框拟人输入 `/退出隊伍`，随后网页移除队伍状态。
 
 实现文件：`src/views/ClientManagementView.vue`
 
@@ -389,7 +402,7 @@ GET /api/admin/users
 显示：
 
 - 用户 ID。
-- 用户名。
+- 昵称（用户名仅用于登录，不在管理界面展示）。
 - 普通用户或超级管理员身份。
 - 正常或已封禁状态。
 - 已登记客户端数量。
@@ -447,6 +460,10 @@ PUT /api/admin/users/{id}/password
 | `GET` | `/api/admin/users` | 获取所有用户 | 超级管理员 |
 | `PATCH` | `/api/admin/users/{id}/status` | 封禁或解封 | 超级管理员 |
 | `PUT` | `/api/admin/users/{id}/password` | 修改用户密码 | 超级管理员 |
+| `GET` | `/api/admin/maps` | 获取云端地图列表 | 超级管理员 |
+| `POST` | `/api/admin/maps` | 上传或覆盖地图 | 超级管理员 |
+| `GET` | `/api/admin/maps/{id}` | 下载单张地图 | 超级管理员 |
+| `DELETE` | `/api/admin/maps/{id}` | 删除云端地图 | 超级管理员 |
 | `GET` | `/api/notifications/bark` | 获取 Bark 设置状态 | 登录用户 |
 | `PUT` | `/api/notifications/bark` | 保存 Bark 设置 | 登录用户 |
 | `POST` | `/api/notifications/bark/test` | 测试 Bark | 登录用户 |
@@ -544,6 +561,8 @@ npm run dev
 ```
 
 Vite 开发服务器会将 `/api` 和 `/ws` 代理到 `127.0.0.1:28672`。
+使用 `npm run dev:online` 时，代理目标切换为线上服务；本地页面操作会真实读写
+线上数据库。
 
 ### 17.2 生产构建
 
