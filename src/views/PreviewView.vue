@@ -336,7 +336,8 @@ async function resolveViewerClient(): Promise<boolean> {
   const queryClientID = typeof route.query.client === 'string'
     ? route.query.client.trim()
     : ''
-  const clients = await apiRequest<ManagedClient[]>('/api/clients')
+  const response = await apiRequest<{ clients: ManagedClient[] }>('/api/clients')
+  const clients = Array.isArray(response.clients) ? response.clients : []
   const selected = queryClientID
     ? clients.find((client) => client.clientId === queryClientID)
     : clients.find((client) => client.online && client.mode === 'monitor' && client.running)
