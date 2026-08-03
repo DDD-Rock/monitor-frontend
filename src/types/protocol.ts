@@ -102,6 +102,11 @@ export interface Envelope<T = unknown> {
 export interface Snapshot {
   type: 'snapshot'
   online: boolean
+  connected?: boolean
+  clientState?: {
+    mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor'
+    running: boolean
+  }
   map?: MapPayload
   frame?: FramePayload
   status?: StatusPayload
