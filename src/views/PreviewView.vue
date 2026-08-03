@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/auth'
 import AnnotationStage from '../components/AnnotationStage.vue'
 import BackButton from '../components/BackButton.vue'
 import LogoMark from '../components/LogoMark.vue'
-import type { BarkSettings, ManagedClient } from '../types/api'
+import type { BarkSettings } from '../types/api'
 import type { Envelope, EXPPayload, FramePayload, GainPayload, MapPayload, RunePayload, Snapshot, StatusPayload, VerificationPayload, ZonePayload } from '../types/protocol'
 
 const route = useRoute()
@@ -17,10 +17,7 @@ const darkThemeKey = 'minimalDarkTheme'
 const minimalDark = ref(readStoredDarkTheme())
 const standardFaviconURL = '/favicon.svg'
 const disguisedFaviconURL = 'data:,'
-const minimalPath = computed(() => ({
-  path: '/dashboard/minimal',
-  query: route.query.client ? { client: route.query.client } : {},
-}))
+const minimalPath = computed(() => ({ path: '/dashboard/minimal' }))
 const map = ref<MapPayload | null>(null)
 const frame = ref<FramePayload | null>(null)
 const exp = ref<EXPPayload | null>(null)
@@ -31,8 +28,6 @@ const gain = ref<GainPayload | null>(null)
 const gainBusy = ref(false)
 const online = ref(false)
 const deviceConnected = ref(false)
-const selectedClientID = ref('')
-const selectedClientName = ref('')
 const status = ref('正在连接监控服务…')
 const connected = ref(false)
 const reconnectAttempt = ref(0)
@@ -109,9 +104,7 @@ const writePoints = computed(() => writeSamples.value.map((value, index) => {
 const channelStatusText = computed(() => {
   if (!connected.value) return status.value
   if (!deviceConnected.value) {
-    return selectedClientName.value
-      ? `${selectedClientName.value} 当前离线`
-      : '已连接服务器，客户端当前离线'
+    return '已连接服务器，客户端当前离线'
   }
   return online.value ? '监控通道已建立' : '客户端已连接，等待启动监控模式'
 })
@@ -332,33 +325,6 @@ function pushWriteSample(value: number) {
   writeSamples.value = [...writeSamples.value.slice(1), value]
 }
 
-async function resolveViewerClient(): Promise<boolean> {
-  const queryClientID = typeof route.query.client === 'string'
-    ? route.query.client.trim()
-    : ''
-  const response = await apiRequest<{ clients: ManagedClient[] }>('/api/clients')
-  const clients = Array.isArray(response.clients) ? response.clients : []
-  const selected = queryClientID
-    ? clients.find((client) => client.clientId === queryClientID)
-    : clients.find((client) => client.online && client.mode === 'monitor' && client.running)
-      ?? clients.find((client) => client.online)
-      ?? clients[0]
-  if (!selected) {
-    status.value = queryClientID ? '指定的客户端不存在或已解绑' : '尚未绑定监控客户端'
-    return false
-  }
-  selectedClientID.value = selected.clientId
-  selectedClientName.value = selected.name
-  deviceConnected.value = selected.online
-  if (!queryClientID) {
-    await router.replace({
-      path: route.path,
-      query: { ...route.query, client: selected.clientId },
-    })
-  }
-  return true
-}
-
 function connect() {
   const accessToken = getAccessToken()
   if (!accessToken) {
@@ -366,9 +332,7 @@ function connect() {
     return
   }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const clientID = selectedClientID.value
   const query = new URLSearchParams({ access_token: accessToken })
-  if (clientID) query.set('client_id', clientID)
   socket = new WebSocket(`${protocol}//${location.host}/ws/view?${query}`)
   socket.onopen = () => {
     connected.value = true
@@ -399,17 +363,21 @@ function applyMessage(message: Snapshot | Envelope) {
   if (message.type === 'snapshot') {
     online.value = message.online
     deviceConnected.value = message.connected ?? message.online
-    if (message.map) map.value = message.map
+    map.value = message.map ?? null
     if (message.frame) applyFrame(message.frame)
+    else {
+      frame.value = null
+      frameArrivalTimes.value = []
+    }
     if (message.status) status.value = message.status.message
     else status.value = message.online
       ? '监控数据已连接'
       : deviceConnected.value ? '客户端在线，监控未启动' : '客户端离线'
-    if (message.exp) exp.value = message.exp
-    if (message.rune) rune.value = message.rune
-    if (message.verification) verification.value = message.verification
-    if (message.zone) zone.value = message.zone
-    if (message.gain) gain.value = message.gain
+    exp.value = message.exp ?? null
+    rune.value = message.rune ?? null
+    verification.value = message.verification ?? null
+    zone.value = message.zone ?? null
+    gain.value = message.gain ?? null
     return
   }
   if (message.type === 'map') map.value = message.payload as MapPayload
@@ -617,6 +585,11 @@ onMounted(async () => {
     await router.replace('/login')
     return
   }
+  // 查看端跟随账号当前唯一的监控会话，不再由 URL 绑定客户端。
+  if ('client' in route.query) {
+    const { client: _legacyClient, ...query } = route.query
+    await router.replace({ path: route.path, query })
+  }
   defaultDocumentTitle = document.title
   if (minimalMode.value) {
     document.body.classList.add('minimal-monitor-mode')
@@ -624,12 +597,6 @@ onMounted(async () => {
     applyFavicon(true)
     applyMinimalTheme()
     startMinimalCharts()
-  }
-  try {
-    if (!(await resolveViewerClient())) return
-  } catch (caught) {
-    status.value = caught instanceof Error ? caught.message : '读取客户端列表失败'
-    return
   }
   connect()
   startDataSampling()

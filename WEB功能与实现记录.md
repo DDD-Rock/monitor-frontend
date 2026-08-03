@@ -264,24 +264,13 @@ GET /ws/clients?access_token=...
 
 实现文件：`src/views/PreviewView.vue`
 
-### 7.1 指定客户端
+### 7.1 账号级监控通道
 
-从客户端管理进入监控时使用：
+监控页固定使用 `/dashboard`，不接受 `client` 参数。查看端 WebSocket 只携带访问
+Token，由服务端订阅该账号当前唯一的活跃监控会话。
 
-```text
-/dashboard?client=<clientId>
-```
-
-网页查看端 WebSocket 会携带相同的客户端 ID：
-
-```text
-/ws/view?access_token=...&client_id=...
-```
-
-后端验证该客户端属于当前用户后，才允许订阅它的监控房间。
-
-如果没有提供 `client` 参数，后端默认选择当前账号最后连接的有效客户端，兼容从
-功能中心直接进入监控的操作。
+不同客户端在不同时间接管监控模式时，服务端会把已打开的查看连接自动切换到新会话，
+不需要刷新页面。没有活跃监控时，最近上报的已绑定客户端仅用于展示离线状态。
 
 ### 7.2 标准监控页面
 
@@ -479,7 +468,7 @@ PUT /api/admin/users/{id}/password
 | --- | --- | --- |
 | `/ws/device?client_id=...` | AutoBuff 客户端 | 上报状态、接收开始/停止命令、接收设备名称 |
 | `/ws/clients?access_token=...` | 客户端管理页 | 接收设备列表、发送开始/停止命令 |
-| `/ws/view?access_token=...&client_id=...` | 监控页面 | 接收指定客户端监控快照和增量 |
+| `/ws/view?access_token=...` | 监控页面 | 接收账号当前唯一活跃监控会话的快照和增量，并在客户端变更时自动切换 |
 
 WebSocket 在 HTTP 环境使用 `ws://`，HTTPS 环境自动切换为 `wss://`。
 
