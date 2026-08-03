@@ -48,6 +48,7 @@ const writeSamples = ref<number[]>(new Array(writeSampleCount).fill(0))
 const expLastChangedAt = ref<number | null>(null)
 // 供「已停滞多久」这类随时间变化的判断重新求值，由 CPU 定时器每 1.5 秒推一次。
 const uiClock = ref(Date.now())
+const frameArrivalTimes = ref<number[]>([])
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
 let cpuTimer: number | null = null
@@ -57,6 +58,19 @@ let lastSampledEXP: number | null = null
 let defaultDocumentTitle = ''
 
 const playerText = computed(() => frame.value?.player ? `X ${(frame.value.player.x * 100).toFixed(1)} · Y ${(frame.value.player.y * 100).toFixed(1)}` : 'X -- · Y --')
+const receivedFrameRateText = computed(() => {
+  const cutoff = uiClock.value - 2000
+  const samples = frameArrivalTimes.value.filter((value) => value >= cutoff)
+  if (samples.length < 2) return '-- FPS'
+  const elapsed = samples.at(-1)! - samples[0]
+  if (elapsed <= 0) return '-- FPS'
+  return `${(((samples.length - 1) * 1000) / elapsed).toFixed(1)} FPS`
+})
+const frameAgeText = computed(() => {
+  if (!frame.value?.capturedAt) return '--'
+  const age = Math.max(0, uiClock.value - frame.value.capturedAt)
+  return age < 1000 ? `${Math.round(age)} ms` : `${(age / 1000).toFixed(1)} s`
+})
 const expValueText = computed(() => exp.value?.currentEXP == null ? '--' : exp.value.currentEXP.toLocaleString('zh-CN'))
 const diskUsageText = computed(() => exp.value?.currentEXP == null ? '--' : `${expValueText.value} MB`)
 const expPercentText = computed(() => exp.value?.percent == null ? '--%' : `${formatPercent(exp.value.percent)}%`)
@@ -329,11 +343,20 @@ function connect() {
   }
 }
 
+function applyFrame(payload: FramePayload) {
+  const now = Date.now()
+  frame.value = payload
+  uiClock.value = now
+  frameArrivalTimes.value = [...frameArrivalTimes.value, now].filter(
+    (value) => value >= now - 2000,
+  )
+}
+
 function applyMessage(message: Snapshot | Envelope) {
   if (message.type === 'snapshot') {
     online.value = message.online
     if (message.map) map.value = message.map
-    if (message.frame) frame.value = message.frame
+    if (message.frame) applyFrame(message.frame)
     if (message.status) status.value = message.status.message
     if (message.exp) exp.value = message.exp
     else status.value = message.online ? '本机监控在线' : '本机监控离线'
@@ -344,7 +367,7 @@ function applyMessage(message: Snapshot | Envelope) {
     return
   }
   if (message.type === 'map') map.value = message.payload as MapPayload
-  if (message.type === 'frame') frame.value = message.payload as FramePayload
+  if (message.type === 'frame') applyFrame(message.payload as FramePayload)
   if (message.type === 'status') {
     const payload = message.payload as StatusPayload
     online.value = payload.online
@@ -618,7 +641,6 @@ onBeforeUnmount(() => {
     <section>
       <p>磁盘使用量：{{ diskUsageText }}</p>
       <p>磁盘使用率：{{ expPercentText }}</p>
-      <p>数据识别方式：{{ expRecognitionMethodText }}</p>
       <p>流入流量：{{ inflowText }}</p>
       <p>流出流量：{{ outflowText }}</p>
       <p>总资源包用量：{{ totalPackageText }}</p>
@@ -784,6 +806,8 @@ onBeforeUnmount(() => {
           <div class="overview-grid">
             <div><span>玩家位置</span><strong class="mono">{{ playerText }}</strong></div>
             <div><span>安全区</span><strong>{{ zoneConfigured ? (zoneOutside ? '已离开' : '区内') : '未设置' }}</strong></div>
+            <div><span>网页收帧</span><strong class="mono">{{ receivedFrameRateText }}</strong></div>
+            <div><span>位置帧龄</span><strong class="mono">{{ frameAgeText }}</strong></div>
           </div>
         </section>
 
