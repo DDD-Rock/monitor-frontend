@@ -22,6 +22,7 @@ const selectedTeamMembers = ref(new Set<string>())
 const selectedLeaderID = ref('')
 const teamSaving = ref(false)
 const teamDisbanding = ref(false)
+const removingTeamMemberID = ref<string | null>(null)
 const teamError = ref('')
 const teamNotice = ref('')
 let socket: WebSocket | null = null
@@ -156,6 +157,26 @@ async function disbandTeam() {
   }
 }
 
+async function removeTeamMember(member: RopeTeam['members'][number]) {
+  if (!ropeTeam.value || member.isLeader || removingTeamMemberID.value) return
+  if (!confirm(`确定将“${member.roleName}”移出队伍吗？\n\n队长客户端会在游戏聊天框发送“/踢出隊伍 ${member.roleName}”。`)) return
+  removingTeamMemberID.value = member.sessionId
+  teamError.value = ''
+  error.value = ''
+  try {
+    const response = await apiRequest<{ team: RopeTeam }>(
+      `/api/rope-team/members/${encodeURIComponent(member.sessionId)}`,
+      { method: 'DELETE' },
+    )
+    ropeTeam.value = response.team
+    teamNotice.value = `已移除 ${member.roleName}，队长客户端正在发送踢出指令。`
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : '移除队伍成员失败'
+  } finally {
+    removingTeamMemberID.value = null
+  }
+}
+
 function control(client: ManagedClient) {
   if (!socket || socket.readyState !== WebSocket.OPEN || !client.online || startBlocked(client)) return
   pending.value = new Set(pending.value).add(client.clientId)
@@ -222,7 +243,7 @@ onBeforeUnmount(() => {
       <p v-if="teamNotice" class="inline-success">{{ teamNotice }}</p>
       <section v-if="ropeTeam" class="rope-team-summary">
         <div><p class="portal-kicker">ROPE PARTY</p><h2>挂绳队伍</h2></div>
-        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ member.isLeader ? '队长' : member.joined ? '已进队' : '等待进队' }}</span><i :class="{ joined: member.joined }"></i></li></ul>
+        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ member.isLeader ? '队长' : member.joined ? '已进队' : '等待进队' }}</span><i :class="{ joined: member.joined }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
         <button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button>
       </section>
       <div v-if="clients.length" class="client-grid">

@@ -107,7 +107,7 @@ onMounted(async () => {
             <li><span>4</span><div><strong>保存并执行</strong><p>点击“保存并执行”。所选客户端会停止原功能，切换到“神殿模式 · 挂绳组队”，开启自动同意组队并开始运行。</p></div></li>
             <li><span>5</span><div><strong>查看入队状态</strong><p>网页的“挂绳队伍”会显示“队长 / 已进队 / 等待进队”。所有队员显示“已进队”后，建队完成。</p></div></li>
           </ol>
-          <section class="wiki-callout is-danger"><strong>当前能力边界</strong><p>目前会自动建队、邀请和接受邀请，但<strong>还不会自动走到绳索、上绳或掉绳恢复</strong>。请先手动把角色放到合适位置。修改已有队伍时也不会自动重建和补发邀请；需要重建时，建议重新创建队伍。</p></section>
+          <section class="wiki-callout is-danger"><strong>当前能力边界</strong><p>目前会自动建队、邀请、接受邀请，也可在网页移除成员，但<strong>还不会自动走到绳索、上绳或掉绳恢复</strong>。请先手动把角色放到合适位置。修改已有队伍时不会自动重建或邀请新增成员；需要重建时，建议重新创建队伍。</p></section>
           <p class="wiki-platform-note"><strong>Windows 与 macOS：</strong>休息室、挂绳组队和进出自由现已采用相同的触发规则与运行流程；首次使用仍建议观察日志并在游戏内实测小地图识别。</p>
         </section>
 

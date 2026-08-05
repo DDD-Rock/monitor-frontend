@@ -720,10 +720,12 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .rope-team-summary { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin: 0 0 18px; padding: 18px 20px; border: 1px solid #dfe5f2; border-radius: 16px; background: #f8faff; }
 .rope-team-summary h2 { margin: 3px 0 0; font-size: 20px; }
 .rope-team-summary ul { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.rope-team-summary li { display: grid; grid-template-columns: auto auto 8px; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 10px; background: white; font-size: 12px; }
+.rope-team-summary li { display: grid; grid-template-columns: auto auto 8px auto; align-items: center; gap: 7px; padding: 8px 10px; border-radius: 10px; background: white; font-size: 12px; }
 .rope-team-summary li span { color: #7b8497; }
 .rope-team-summary li i { width: 7px; height: 7px; border-radius: 50%; background: #efaa3d; }
 .rope-team-summary li i.joined { background: #25bc78; }
+.team-member-remove { border: 0; padding: 3px 6px; color: #b9473e; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
+.team-member-remove:disabled { opacity: .5; cursor: wait; }
 .team-disband-button { flex: 0 0 auto; border: 1px solid #f0c9c5; border-radius: 10px; padding: 9px 12px; color: #b9473e; background: #fff5f3; font-weight: 750; cursor: pointer; }
 .team-disband-button:disabled { opacity: .5; cursor: wait; }
 .client-actions { display: flex; justify-content: flex-end; align-items: center; gap: 9px; }
