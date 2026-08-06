@@ -206,13 +206,21 @@ async function saveBossRoleName() {
   bossRoleSaving.value = true
   error.value = ''
   try {
-    const response = await apiRequest<{ team: RopeTeam }>('/api/rope-team/boss', {
+    const response = await apiRequest<{ team: RopeTeam; cycleStarted: boolean; leaderOnline: boolean; alreadyActive: boolean; startReason: string }>('/api/rope-team/boss', {
       method: 'PUT',
       body: JSON.stringify({ roleName }),
     })
     ropeTeam.value = response.team
     bossRoleDraft.value = response.team.bossRoleName
-    showTeamNotice(`目标老板已设置为 ${roleName}`, 5000)
+    showTeamNotice(response.cycleStarted
+      ? `目标老板已设置为 ${roleName}，队长客户端已开始邀请。`
+      : response.alreadyActive
+        ? `目标老板仍为 ${roleName}，当前邀请流程已在运行，不会重复执行。`
+      : response.leaderOnline
+        ? response.startReason === 'leader_unavailable'
+          ? `目标老板已设置为 ${roleName}，但队长客户端暂时无法接收邀请指令。`
+          : `目标老板已设置为 ${roleName}，但周期启动失败（${response.startReason}）。`
+        : `目标老板已设置为 ${roleName}，但队长当前离线，无法邀请老板。`, 5000)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '目标老板名称保存失败'
   } finally {
@@ -220,13 +228,15 @@ async function saveBossRoleName() {
   }
 }
 
-function bossCycleLabel(state: RopeTeam['bossCycleState']) {
+function bossCycleLabel(team: RopeTeam) {
+  const leader = team.members.find((member) => member.isLeader)
+  if (team.bossRoleName && !leader?.online) return '队长离线，无法邀请老板'
   return {
     idle: '等待 Buff 临期',
     inviting: '正在邀请老板',
     casting: '全员释放 Buff',
     kicking: '正在踢出老板',
-  }[state]
+  }[team.bossCycleState]
 }
 
 function control(client: ManagedClient) {
@@ -296,8 +306,8 @@ onBeforeUnmount(() => {
       <p v-if="teamNotice" class="inline-success">{{ teamNotice }}</p>
       <section v-if="ropeTeam" class="rope-team-summary">
         <div><p class="portal-kicker">ROPE PARTY</p><h2>挂绳队伍</h2></div>
-        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ ropeTeam.bossCycleState === 'casting' ? (member.bossBuffCompleted ? 'BUFF已完成' : '等待BUFF') : member.isLeader ? (ropeTeam.createdInGame ? '已创建队伍' : '正在建队') : member.joined ? '已进队' : member.invited ? '已发送邀请' : '等待邀请' }}</span><i :class="{ joined: member.bossBuffCompleted || member.joined || (member.isLeader && ropeTeam.createdInGame), invited: member.invited && !member.joined }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
-        <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名" :disabled="!ropeTeam.createdInGame"><button :disabled="bossRoleSaving || !ropeTeam.createdInGame" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : '保存老板' }}</button><small>{{ ropeTeam.createdInGame ? bossCycleLabel(ropeTeam.bossCycleState) : '等待队长完成建队' }}</small></div>
+        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ ropeTeam.bossCycleState === 'casting' ? (!member.online ? '离线跳过' : member.bossBuffCompleted ? 'BUFF已完成' : '等待BUFF') : member.isLeader ? (ropeTeam.createdInGame ? '已创建队伍' : '正在建队') : member.joined ? '已进队' : member.invited ? '已发送邀请' : '等待邀请' }}</span><i :class="{ joined: member.bossBuffCompleted || member.joined || (member.isLeader && ropeTeam.createdInGame), invited: member.invited && !member.joined, skipped: ropeTeam.bossCycleState === 'casting' && !member.online }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
+        <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名" :disabled="!ropeTeam.createdInGame || ropeTeam.bossCycleState !== 'idle'"><button :disabled="bossRoleSaving || !ropeTeam.createdInGame || ropeTeam.bossCycleState !== 'idle'" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : ropeTeam.bossCycleState !== 'idle' ? '流程进行中' : '保存老板' }}</button><small>{{ ropeTeam.createdInGame ? bossCycleLabel(ropeTeam) : '等待队长完成建队' }}</small></div>
         <button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button>
       </section>
       <div v-if="clients.length" class="client-grid">

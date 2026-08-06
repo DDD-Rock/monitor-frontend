@@ -728,6 +728,7 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .rope-team-summary li i { width: 7px; height: 7px; border-radius: 50%; background: #efaa3d; }
 .rope-team-summary li i.joined { background: #25bc78; }
 .rope-team-summary li i.invited { background: #315efb; }
+.rope-team-summary li i.skipped { background: #bbc1cd; }
 .team-member-remove { border: 0; padding: 3px 6px; color: #b9473e; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
 .team-member-remove:disabled { opacity: .5; cursor: wait; }
 .rope-boss-config { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(180px, 280px) auto minmax(0, 1fr); gap: 8px; align-items: center; padding-top: 14px; border-top: 1px solid #e3e8f2; }
