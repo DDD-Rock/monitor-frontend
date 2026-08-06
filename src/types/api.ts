@@ -47,6 +47,7 @@ export interface AdminUser {
   lastLoginAt: number | null
   connectedClientCount: number
   maxClientCount: number
+  authorizedModes: ManagedClient['mode'][]
 }
 
 export interface AdminInviteCode {

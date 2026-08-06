@@ -134,7 +134,7 @@ async function saveTeam() {
   teamSaving.value = true
   teamError.value = ''
   try {
-    const response = await apiRequest<{ team: RopeTeam; firstCreation: boolean }>('/api/rope-team', {
+    const response = await apiRequest<{ team: RopeTeam; firstCreation: boolean; leaderChanging: boolean }>('/api/rope-team', {
       method: 'PUT',
       body: JSON.stringify({
         leaderSessionId: selectedLeaderID.value,

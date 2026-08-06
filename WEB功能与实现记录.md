@@ -151,7 +151,7 @@ WHERE username = 'your_admin_username';
 - 仅 `isSuperAdmin === true` 时显示功能入口。
 - 支持查看地图名称、大小、上传者昵称和更新时间，并按需渲染地图结构预览。
 - 支持上传客户端导出的 JSON、下载单张地图和删除云端地图。
-- 普通用户直接访问 `/admin/maps` 会被送回功能中心，后端接口仍会返回 `403`。
+- 普通用户直接访问 `/admin/maps` 会被送回功能中心；客户端可读取云端地图列表并下载，但上传、覆盖和删除仍返回 `403`。
 
 ## 6. 客户端管理
 
@@ -449,9 +449,9 @@ PUT /api/admin/users/{id}/password
 | `GET` | `/api/admin/users` | 获取所有用户 | 超级管理员 |
 | `PATCH` | `/api/admin/users/{id}/status` | 封禁或解封 | 超级管理员 |
 | `PUT` | `/api/admin/users/{id}/password` | 修改用户密码 | 超级管理员 |
-| `GET` | `/api/admin/maps` | 获取云端地图列表 | 超级管理员 |
+| `GET` | `/api/admin/maps` | 获取云端地图列表 | 登录用户 |
 | `POST` | `/api/admin/maps` | 上传或覆盖地图 | 超级管理员 |
-| `GET` | `/api/admin/maps/{id}` | 下载单张地图 | 超级管理员 |
+| `GET` | `/api/admin/maps/{id}` | 下载单张地图 | 登录用户 |
 | `DELETE` | `/api/admin/maps/{id}` | 删除云端地图 | 超级管理员 |
 | `GET` | `/api/notifications/bark` | 获取 Bark 设置状态 | 登录用户 |
 | `PUT` | `/api/notifications/bark` | 保存 Bark 设置 | 登录用户 |
