@@ -235,7 +235,8 @@ function bossCycleLabel(team: RopeTeam) {
     idle: '等待 Buff 临期',
     inviting: '正在邀请老板',
     casting: '全员释放 Buff',
-    kicking: '正在踢出老板',
+    kicking: '正在结束本轮',
+    disbanding: '正在解散并重建队伍',
   }[team.bossCycleState]
 }
 
