@@ -724,8 +724,13 @@ body.minimal-monitor-mode.minimal-dark-theme {
 .rope-team-summary li span { color: #7b8497; }
 .rope-team-summary li i { width: 7px; height: 7px; border-radius: 50%; background: #efaa3d; }
 .rope-team-summary li i.joined { background: #25bc78; }
+.rope-team-summary li i.invited { background: #315efb; }
 .team-member-remove { border: 0; padding: 3px 6px; color: #b9473e; background: transparent; font-size: 11px; font-weight: 700; cursor: pointer; }
 .team-member-remove:disabled { opacity: .5; cursor: wait; }
+.rope-boss-config { display: grid; grid-template-columns: minmax(130px, 180px) auto; gap: 6px; align-items: center; }
+.rope-boss-config input { min-width: 0; border: 1px solid #d9deea; border-radius: 8px; padding: 8px 9px; font: inherit; }
+.rope-boss-config button { border: 0; border-radius: 8px; padding: 8px 10px; color: #315efb; background: #edf2ff; font-weight: 700; cursor: pointer; }
+.rope-boss-config small { grid-column: 1 / -1; color: #7b8497; font-size: 11px; }
 .team-disband-button { flex: 0 0 auto; border: 1px solid #f0c9c5; border-radius: 10px; padding: 9px 12px; color: #b9473e; background: #fff5f3; font-weight: 750; cursor: pointer; }
 .team-disband-button:disabled { opacity: .5; cursor: wait; }
 .client-actions { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }

@@ -22,11 +22,23 @@ const selectedTeamMembers = ref(new Set<string>())
 const selectedLeaderID = ref('')
 const teamSaving = ref(false)
 const teamDisbanding = ref(false)
+const awaitingTeamDisbandAck = ref(false)
 const removingTeamMemberID = ref<string | null>(null)
+const bossRoleDraft = ref('')
+const bossRoleSaving = ref(false)
 const teamError = ref('')
 const teamNotice = ref('')
 let socket: WebSocket | null = null
 let reconnectTimer: number | null = null
+let teamNoticeTimer: number | null = null
+
+function showTeamNotice(message: string, clearAfterMs = 0) {
+  teamNotice.value = message
+  if (teamNoticeTimer !== null) window.clearTimeout(teamNoticeTimer)
+  teamNoticeTimer = clearAfterMs > 0
+    ? window.setTimeout(() => { teamNotice.value = ''; teamNoticeTimer = null }, clearAfterMs)
+    : null
+}
 
 const onlineCount = computed(() => clients.value.filter((item) => item.online).length)
 const activeMonitorClientID = computed(() => clients.value.find(
@@ -49,8 +61,14 @@ function connect() {
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data) as { type: string; clients?: ManagedClient[]; ropeTeam?: RopeTeam | null }
     if (message.type === 'clients' && message.clients) {
+      const hadTeam = ropeTeam.value !== null
       clients.value = message.clients
       ropeTeam.value = message.ropeTeam ?? null
+      if (ropeTeam.value && !bossRoleSaving.value) bossRoleDraft.value = ropeTeam.value.bossRoleName
+      if (hadTeam && !ropeTeam.value && awaitingTeamDisbandAck.value) {
+        awaitingTeamDisbandAck.value = false
+        showTeamNotice('队伍已解散，队长客户端已退出游戏队伍。', 5000)
+      }
       for (const client of message.clients) {
         if (!(client.clientId in roleDrafts.value)) roleDrafts.value[client.clientId] = client.roleName
       }
@@ -144,13 +162,15 @@ async function disbandTeam() {
   const leaderName = leader?.roleName || '当前队长'
   if (!confirm(`确定解散当前队伍吗？\n\n${leaderName} 所在客户端会在游戏聊天框发送“/退出隊伍”。`)) return
   teamDisbanding.value = true
+  awaitingTeamDisbandAck.value = true
   teamError.value = ''
   error.value = ''
+  showTeamNotice('正在等待队长客户端退出游戏队伍…')
   try {
     await apiRequest('/api/rope-team', { method: 'DELETE' })
-    ropeTeam.value = null
-    teamNotice.value = '队伍已解散，队长客户端正在退出游戏队伍。'
   } catch (caught) {
+    awaitingTeamDisbandAck.value = false
+    showTeamNotice('')
     error.value = caught instanceof Error ? caught.message : '队伍解散失败'
   } finally {
     teamDisbanding.value = false
@@ -175,6 +195,38 @@ async function removeTeamMember(member: RopeTeam['members'][number]) {
   } finally {
     removingTeamMemberID.value = null
   }
+}
+
+async function saveBossRoleName() {
+  const roleName = bossRoleDraft.value.trim()
+  if (!ropeTeam.value || !roleName || [...roleName].length > 24 || bossRoleSaving.value) {
+    error.value = '目标老板名称须为 1–24 个字符'
+    return
+  }
+  bossRoleSaving.value = true
+  error.value = ''
+  try {
+    const response = await apiRequest<{ team: RopeTeam }>('/api/rope-team/boss', {
+      method: 'PUT',
+      body: JSON.stringify({ roleName }),
+    })
+    ropeTeam.value = response.team
+    bossRoleDraft.value = response.team.bossRoleName
+    showTeamNotice(`目标老板已设置为 ${roleName}`, 5000)
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : '目标老板名称保存失败'
+  } finally {
+    bossRoleSaving.value = false
+  }
+}
+
+function bossCycleLabel(state: RopeTeam['bossCycleState']) {
+  return {
+    idle: '等待 Buff 临期',
+    inviting: '正在邀请老板',
+    casting: '全员释放 Buff',
+    kicking: '正在踢出老板',
+  }[state]
 }
 
 function control(client: ManagedClient) {
@@ -224,6 +276,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+  if (teamNoticeTimer !== null) clearTimeout(teamNoticeTimer)
   socket?.close()
 })
 </script>
@@ -243,8 +296,9 @@ onBeforeUnmount(() => {
       <p v-if="teamNotice" class="inline-success">{{ teamNotice }}</p>
       <section v-if="ropeTeam" class="rope-team-summary">
         <div><p class="portal-kicker">ROPE PARTY</p><h2>挂绳队伍</h2></div>
-        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ member.isLeader ? '队长' : member.joined ? '已进队' : '等待进队' }}</span><i :class="{ joined: member.joined }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
-        <button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button>
+        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ ropeTeam.bossCycleState === 'casting' ? (member.bossBuffCompleted ? 'BUFF已完成' : '等待BUFF') : member.isLeader ? (ropeTeam.createdInGame ? '已创建队伍' : '正在建队') : member.joined ? '已进队' : member.invited ? '已发送邀请' : '等待邀请' }}</span><i :class="{ joined: member.bossBuffCompleted || member.joined || (member.isLeader && ropeTeam.createdInGame), invited: member.invited && !member.joined }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
+        <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名" :disabled="!ropeTeam.createdInGame"><button :disabled="bossRoleSaving || !ropeTeam.createdInGame" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : '保存老板' }}</button><small>{{ ropeTeam.createdInGame ? bossCycleLabel(ropeTeam.bossCycleState) : '等待队长完成建队' }}</small></div>
+        <button class="team-disband-button" :disabled="teamDisbanding || awaitingTeamDisbandAck" @click="disbandTeam">{{ awaitingTeamDisbandAck ? '等待客户端…' : teamDisbanding ? '解散中…' : '解散队伍' }}</button>
       </section>
       <div v-if="clients.length" class="client-grid">
         <article v-for="client in clients" :key="client.id" class="client-card">

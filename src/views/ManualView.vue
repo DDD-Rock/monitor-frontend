@@ -106,8 +106,9 @@ onMounted(async () => {
             <li><span>3</span><div><strong>创建队伍</strong><p>点击“创建队伍”，勾选 1–5 个客户端，并从已选角色中指定一名队长。</p></div></li>
             <li><span>4</span><div><strong>保存并执行</strong><p>点击“保存并执行”。所选客户端会停止原功能，切换到“神殿模式 · 挂绳组队”，开启自动同意组队并开始运行。</p></div></li>
             <li><span>5</span><div><strong>查看入队状态</strong><p>网页的“挂绳队伍”会显示“队长 / 已进队 / 等待进队”。所有队员显示“已进队”后，建队完成。</p></div></li>
+            <li><span>6</span><div><strong>设置目标老板</strong><p>队长完成建队后，在挂绳队伍区域填写目标老板角色名。任一客户端 Buff 进入最后 10 秒时，队长会每 8 秒邀请一次，老板进队后所有客户端强制释放已勾选 Buff，全部完成后由队长自动踢出老板。</p></div></li>
           </ol>
-          <section class="wiki-callout is-danger"><strong>当前能力边界</strong><p>目前会自动建队、邀请、接受邀请，也可在网页移除成员，但<strong>还不会自动走到绳索、上绳或掉绳恢复</strong>。请先手动把角色放到合适位置。修改已有队伍时不会自动重建或邀请新增成员；需要重建时，建议重新创建队伍。</p></section>
+          <section class="wiki-callout is-danger"><strong>当前能力边界</strong><p>目前会自动建队、邀请、接受邀请，也可在网页移除成员；修改队伍并保存时会按当前成员重新建队。系统<strong>还不会自动走到绳索、上绳或掉绳恢复</strong>，请先手动把角色放到合适位置。</p></section>
           <p class="wiki-platform-note"><strong>Windows 与 macOS：</strong>休息室、挂绳组队和进出自由现已采用相同的触发规则与运行流程；首次使用仍建议观察日志并在游戏内实测小地图识别。</p>
         </section>
 
