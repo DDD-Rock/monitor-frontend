@@ -142,7 +142,9 @@ async function saveTeam() {
       }),
     })
     ropeTeam.value = response.team
-    teamNotice.value = response.firstCreation
+    teamNotice.value = response.leaderChanging
+      ? '队长正在退出原游戏队伍，退出完成后新队长将创建队伍并重新邀请成员。'
+      : response.firstCreation
       ? '队伍已创建，客户端正在切换模式并发送邀请。'
       : '队伍配置已保存，客户端正在重新进入挂绳组队模式。'
     teamDialog.value?.close()
