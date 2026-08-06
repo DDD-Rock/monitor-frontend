@@ -22,7 +22,6 @@ const selectedTeamMembers = ref(new Set<string>())
 const selectedLeaderID = ref('')
 const teamSaving = ref(false)
 const teamDisbanding = ref(false)
-const awaitingTeamDisbandAck = ref(false)
 const removingTeamMemberID = ref<string | null>(null)
 const bossRoleDraft = ref('')
 const bossRoleSaving = ref(false)
@@ -61,14 +60,9 @@ function connect() {
   socket.onmessage = (event) => {
     const message = JSON.parse(event.data) as { type: string; clients?: ManagedClient[]; ropeTeam?: RopeTeam | null }
     if (message.type === 'clients' && message.clients) {
-      const hadTeam = ropeTeam.value !== null
       clients.value = message.clients
       ropeTeam.value = message.ropeTeam ?? null
       if (ropeTeam.value && !bossRoleSaving.value) bossRoleDraft.value = ropeTeam.value.bossRoleName
-      if (hadTeam && !ropeTeam.value && awaitingTeamDisbandAck.value) {
-        awaitingTeamDisbandAck.value = false
-        showTeamNotice('队伍已解散，队长客户端已退出游戏队伍。', 5000)
-      }
       for (const client of message.clients) {
         if (!(client.clientId in roleDrafts.value)) roleDrafts.value[client.clientId] = client.roleName
       }
@@ -118,9 +112,12 @@ function toggleTeamMember(sessionID: string, checked: boolean) {
   if (checked) {
     if (next.size >= 5) return
     next.add(sessionID)
+    if (!next.has(selectedLeaderID.value)) selectedLeaderID.value = sessionID
   } else {
     next.delete(sessionID)
-    if (selectedLeaderID.value === sessionID) selectedLeaderID.value = ''
+    if (selectedLeaderID.value === sessionID) {
+      selectedLeaderID.value = next.values().next().value ?? ''
+    }
   }
   selectedTeamMembers.value = next
 }
@@ -160,17 +157,20 @@ async function disbandTeam() {
   if (!ropeTeam.value || teamDisbanding.value) return
   const leader = ropeTeam.value.members.find((member) => member.isLeader)
   const leaderName = leader?.roleName || '当前队长'
-  if (!confirm(`确定解散当前队伍吗？\n\n${leaderName} 所在客户端会在游戏聊天框发送“/退出隊伍”。`)) return
+  const commandNotice = leader?.online
+    ? `${leaderName} 所在客户端会同时尝试发送“/退出隊伍”。`
+    : `${leaderName} 当前离线，网页队伍仍会直接解散；下次创建时客户端会先尝试退出旧队伍。`
+  if (!confirm(`确定解散当前队伍吗？\n\n${commandNotice}`)) return
   teamDisbanding.value = true
-  awaitingTeamDisbandAck.value = true
   teamError.value = ''
   error.value = ''
-  showTeamNotice('正在等待队长客户端退出游戏队伍…')
   try {
-    await apiRequest('/api/rope-team', { method: 'DELETE' })
+    const response = await apiRequest<{ commandSent: boolean }>('/api/rope-team', { method: 'DELETE' })
+    ropeTeam.value = null
+    showTeamNotice(response.commandSent
+      ? '队伍已解散，已通知队长客户端退出游戏队伍。'
+      : '队伍已解散；队长客户端未在线，下次创建队伍时会先尝试退出旧队伍。', 5000)
   } catch (caught) {
-    awaitingTeamDisbandAck.value = false
-    showTeamNotice('')
     error.value = caught instanceof Error ? caught.message : '队伍解散失败'
   } finally {
     teamDisbanding.value = false
@@ -298,7 +298,7 @@ onBeforeUnmount(() => {
         <div><p class="portal-kicker">ROPE PARTY</p><h2>挂绳队伍</h2></div>
         <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ ropeTeam.bossCycleState === 'casting' ? (member.bossBuffCompleted ? 'BUFF已完成' : '等待BUFF') : member.isLeader ? (ropeTeam.createdInGame ? '已创建队伍' : '正在建队') : member.joined ? '已进队' : member.invited ? '已发送邀请' : '等待邀请' }}</span><i :class="{ joined: member.bossBuffCompleted || member.joined || (member.isLeader && ropeTeam.createdInGame), invited: member.invited && !member.joined }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
         <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名" :disabled="!ropeTeam.createdInGame"><button :disabled="bossRoleSaving || !ropeTeam.createdInGame" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : '保存老板' }}</button><small>{{ ropeTeam.createdInGame ? bossCycleLabel(ropeTeam.bossCycleState) : '等待队长完成建队' }}</small></div>
-        <button class="team-disband-button" :disabled="teamDisbanding || awaitingTeamDisbandAck" @click="disbandTeam">{{ awaitingTeamDisbandAck ? '等待客户端…' : teamDisbanding ? '解散中…' : '解散队伍' }}</button>
+        <button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button>
       </section>
       <div v-if="clients.length" class="client-grid">
         <article v-for="client in clients" :key="client.id" class="client-card">
