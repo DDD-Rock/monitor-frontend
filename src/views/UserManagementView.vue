@@ -78,8 +78,8 @@ async function loadUserClients(user: AdminUser) {
 
 async function openClientDialog(user: AdminUser) {
   selectedUser.value = user
-	modeDraft.value = [...user.authorizedModes]
-	selectedClientIDs.value = new Set()
+  modeDraft.value = [...user.authorizedModes]
+  selectedClientIDs.value = new Set()
   clients.value = []
   maxClientCount.value = user.maxClientCount
   dialogError.value = ''
@@ -258,13 +258,13 @@ onMounted(async () => {
 
       <div v-if="dialogLoading" class="dialog-state">正在加载客户端…</div>
       <div v-else-if="clients.length" class="admin-client-list">
-		<div class="kick-toolbar">
-		  <label><input :checked="allOnlineSelected" :disabled="!onlineClients.length" type="checkbox" @change="toggleAllOnline">全选在线客户端</label>
-		  <button :disabled="!selectedClientIDs.size || kickingClients" @click="kickSelectedClients">{{ kickingClients ? '正在踢下线…' : `一键踢下线 (${selectedClientIDs.size})` }}</button>
-		</div>
+        <div class="kick-toolbar">
+          <label><input :checked="allOnlineSelected" :disabled="!onlineClients.length" type="checkbox" @change="toggleAllOnline">全选在线客户端</label>
+          <button :disabled="!selectedClientIDs.size || kickingClients" @click="kickSelectedClients">{{ kickingClients ? '正在踢下线…' : `一键踢下线 (${selectedClientIDs.size})` }}</button>
+        </div>
         <article v-for="client in clients" :key="client.id">
           <div class="admin-client-main">
-			<input class="client-kick-checkbox" :checked="selectedClientIDs.has(client.id)" :disabled="!client.online || kickingClients" type="checkbox" :aria-label="`选择 ${client.name}`" @change="toggleClient(client.id)">
+            <input class="client-kick-checkbox" :checked="selectedClientIDs.has(client.id)" :disabled="!client.online || kickingClients" type="checkbox" :aria-label="`选择 ${client.name}`" @change="toggleClient(client.id)">
             <span class="client-online-dot" :class="{ online: client.online }"></span>
             <div>
               <strong>{{ client.name }}</strong>

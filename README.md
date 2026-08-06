@@ -31,13 +31,13 @@ npm run dev:online
 npm run build
 ```
 
-将生成的 `dist` 内容复制到服务器 `/var/www/autobuff-monitor`，由 Nginx 公网端口 `28671` 提供访问。
+将生成的 `dist` 内容复制到服务器 `/var/www/autobuff-monitor`，由 Nginx 通过 `https://buff.juanwang.cc` 提供访问。
 
 当前联调地址：
 
-- 注册：`http://106.52.208.129:28671/register`
-- 登录：`http://106.52.208.129:28671/login`
-- 健康检查：`http://106.52.208.129:28671/api/healthz`
+- 注册：`https://buff.juanwang.cc/register`
+- 登录：`https://buff.juanwang.cc/login`
+- 健康检查：`https://buff.juanwang.cc/api/healthz`
 
 ## 路由
 
