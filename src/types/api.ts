@@ -34,7 +34,7 @@ export interface RopeTeam {
   createdInGame: boolean
   bossRoleName: string
   bossCycleId: number
-  bossCycleState: 'idle' | 'inviting' | 'casting' | 'kicking'
+  bossCycleState: 'idle' | 'inviting' | 'casting' | 'kicking' | 'disbanding' | 'changing_leader'
   members: RopeTeamMember[]
 }
 

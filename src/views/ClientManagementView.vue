@@ -40,6 +40,9 @@ function showTeamNotice(message: string, clearAfterMs = 0) {
 }
 
 const onlineCount = computed(() => clients.value.filter((item) => item.online).length)
+const teamConfigurationBlocked = computed(() =>
+  ropeTeam.value !== null && ropeTeam.value.bossCycleState !== 'idle',
+)
 const activeMonitorClientID = computed(() => clients.value.find(
   (item) => item.online && item.mode === 'monitor' && item.running,
 )?.clientId ?? null)
@@ -239,6 +242,7 @@ function bossCycleLabel(team: RopeTeam) {
     casting: '全员释放 Buff',
     kicking: '正在结束本轮',
     disbanding: '正在解散并重建队伍',
+    changing_leader: '正在更换队长',
   }[team.bossCycleState]
 }
 
@@ -303,7 +307,7 @@ onBeforeUnmount(() => {
     <section class="portal-content manage-content">
       <div class="manage-heading">
         <div><p class="portal-kicker">CLIENTS</p><h1>客户端管理</h1><p>每台设备都有一个独一无二的名字，客户端界面会显示同一个名字。</p></div>
-        <div class="manage-heading-actions"><button class="team-create-button" :disabled="!eligibleTeamClients.length" @click="openTeamDialog">{{ ropeTeam ? '修改队伍' : '创建队伍' }}</button><span class="live-summary" :class="{ active: connected }">{{ onlineCount }} 台在线</span></div>
+        <div class="manage-heading-actions"><button class="team-create-button" :disabled="!eligibleTeamClients.length || teamConfigurationBlocked" :title="teamConfigurationBlocked ? '当前队伍流程结束后才能修改队伍' : ''" @click="openTeamDialog">{{ ropeTeam ? '修改队伍' : '创建队伍' }}</button><span class="live-summary" :class="{ active: connected }">{{ onlineCount }} 台在线</span></div>
       </div>
       <p v-if="error" class="inline-notice">{{ error }}</p>
       <p v-if="teamNotice" class="inline-success">{{ teamNotice }}</p>
