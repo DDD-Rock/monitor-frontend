@@ -25,6 +25,7 @@ const teamDisbanding = ref(false)
 const removingTeamMemberID = ref<string | null>(null)
 const bossRoleDraft = ref('')
 const bossRoleSaving = ref(false)
+const teamRestarting = ref(false)
 const teamError = ref('')
 const teamNotice = ref('')
 let socket: WebSocket | null = null
@@ -40,9 +41,7 @@ function showTeamNotice(message: string, clearAfterMs = 0) {
 }
 
 const onlineCount = computed(() => clients.value.filter((item) => item.online).length)
-const teamConfigurationBlocked = computed(() =>
-  ropeTeam.value !== null && ropeTeam.value.bossCycleState !== 'idle',
-)
+const teamConfigurationBlocked = computed(() => ropeTeam.value !== null)
 const activeMonitorClientID = computed(() => clients.value.find(
   (item) => item.online && item.mode === 'monitor' && item.running,
 )?.clientId ?? null)
@@ -134,22 +133,24 @@ async function saveTeam() {
     teamError.value = '请从已选客户端中指定一名队长'
     return
   }
+  const bossRoleName = bossRoleDraft.value.trim()
+  if (!bossRoleName || [...bossRoleName].length > 24) {
+    teamError.value = '请填写 1–24 个字符的老板角色名'
+    return
+  }
   teamSaving.value = true
   teamError.value = ''
   try {
-    const response = await apiRequest<{ team: RopeTeam; firstCreation: boolean; leaderChanging: boolean }>('/api/rope-team', {
+    const response = await apiRequest<{ team: RopeTeam }>('/api/rope-team', {
       method: 'PUT',
       body: JSON.stringify({
         leaderSessionId: selectedLeaderID.value,
         memberSessionIds: [...selectedTeamMembers.value],
+        bossRoleName,
       }),
     })
     ropeTeam.value = response.team
-    teamNotice.value = response.leaderChanging
-      ? '队长正在退出原游戏队伍，退出完成后新队长将创建队伍并重新邀请成员。'
-      : response.firstCreation
-      ? '队伍已创建，客户端正在切换模式并发送邀请。'
-      : '队伍配置已保存，客户端正在重新进入挂绳组队模式。'
+    teamNotice.value = '队伍已创建，客户端正在切换模式并发送邀请。'
     teamDialog.value?.close()
   } catch (caught) {
     teamError.value = caught instanceof Error ? caught.message : '队伍保存失败'
@@ -170,11 +171,9 @@ async function disbandTeam() {
   teamError.value = ''
   error.value = ''
   try {
-    const response = await apiRequest<{ commandSent: boolean }>('/api/rope-team', { method: 'DELETE' })
+    await apiRequest('/api/rope-team', { method: 'DELETE' })
     ropeTeam.value = null
-    showTeamNotice(response.commandSent
-      ? '队伍已解散，已通知队长客户端退出游戏队伍。'
-      : '队伍已解散；队长客户端未在线，下次创建队伍时会先尝试退出旧队伍。', 5000)
+    showTeamNotice('队伍已从内存删除，并已通知在线客户端清理状态。', 5000)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '队伍解散失败'
   } finally {
@@ -211,21 +210,13 @@ async function saveBossRoleName() {
   bossRoleSaving.value = true
   error.value = ''
   try {
-    const response = await apiRequest<{ team: RopeTeam; cycleStarted: boolean; leaderOnline: boolean; alreadyActive: boolean; startReason: string }>('/api/rope-team/boss', {
+    const response = await apiRequest<{ team: RopeTeam }>('/api/rope-team/boss', {
       method: 'PUT',
       body: JSON.stringify({ roleName }),
     })
     ropeTeam.value = response.team
     bossRoleDraft.value = response.team.bossRoleName
-    showTeamNotice(response.cycleStarted
-      ? `目标老板已设置为 ${roleName}，队长客户端已开始邀请。`
-      : response.alreadyActive
-        ? `目标老板仍为 ${roleName}，当前邀请流程已在运行，不会重复执行。`
-      : response.leaderOnline
-        ? response.startReason === 'leader_unavailable'
-          ? `目标老板已设置为 ${roleName}，但队长客户端暂时无法接收邀请指令。`
-          : `目标老板已设置为 ${roleName}，但周期启动失败（${response.startReason}）。`
-        : `目标老板已设置为 ${roleName}，但队长当前离线，无法邀请老板。`, 5000)
+    showTeamNotice(`目标老板已更新为 ${roleName}。`, 5000)
   } catch (caught) {
     error.value = caught instanceof Error ? caught.message : '目标老板名称保存失败'
   } finally {
@@ -233,17 +224,34 @@ async function saveBossRoleName() {
   }
 }
 
-function bossCycleLabel(team: RopeTeam) {
+function ropeStateLabel(team: RopeTeam) {
   const leader = team.members.find((member) => member.isLeader)
   if (team.bossRoleName && !leader?.online) return '队长离线，无法邀请老板'
-  return {
-    idle: '等待 Buff 临期',
+  if (team.lastError) return team.lastError
+  if (team.cycle) return {
     inviting: '正在邀请老板',
     casting: '全员释放 Buff',
-    kicking: '正在结束本轮',
-    disbanding: '正在解散并重建队伍',
-    changing_leader: '正在更换队长',
-  }[team.bossCycleState]
+    rebuilding: '正在解散并重建队伍',
+    waiting_members: '重建完成，等待成员入队',
+    finished: '本轮已完成',
+  }[team.cycle.state]
+  return { setting_up: '正在执行建队命令', waiting_members: '等待固定成员入队', ready: '等待 Buff 临期', error: '流程发生错误' }[team.state]
+}
+
+async function restartTeamAndBuff() {
+  if (!ropeTeam.value || teamRestarting.value) return
+  if (!confirm('将废弃当前流程，由队长解散队伍、重新邀请全部成员并立即放 BUFF。确定继续吗？')) return
+  teamRestarting.value = true
+  error.value = ''
+  try {
+    const response = await apiRequest<{ team: RopeTeam }>('/api/rope-team/restart', { method: 'POST' })
+    ropeTeam.value = response.team
+    showTeamNotice('已通知队长重新组队，全部成员入队后会立即邀请老板并放 BUFF。', 5000)
+  } catch (caught) {
+    error.value = caught instanceof Error ? caught.message : '重新组队失败'
+  } finally {
+    teamRestarting.value = false
+  }
 }
 
 function control(client: ManagedClient) {
@@ -307,15 +315,15 @@ onBeforeUnmount(() => {
     <section class="portal-content manage-content">
       <div class="manage-heading">
         <div><p class="portal-kicker">CLIENTS</p><h1>客户端管理</h1><p>每台设备都有一个独一无二的名字，客户端界面会显示同一个名字。</p></div>
-        <div class="manage-heading-actions"><button class="team-create-button" :disabled="!eligibleTeamClients.length || teamConfigurationBlocked" :title="teamConfigurationBlocked ? '当前队伍流程结束后才能修改队伍' : ''" @click="openTeamDialog">{{ ropeTeam ? '修改队伍' : '创建队伍' }}</button><span class="live-summary" :class="{ active: connected }">{{ onlineCount }} 台在线</span></div>
+        <div class="manage-heading-actions"><button class="team-create-button" :disabled="!eligibleTeamClients.length || teamConfigurationBlocked" :title="teamConfigurationBlocked ? '请先解散当前内存队伍再重新创建' : ''" @click="openTeamDialog">创建队伍</button><span class="live-summary" :class="{ active: connected }">{{ onlineCount }} 台在线</span></div>
       </div>
       <p v-if="error" class="inline-notice">{{ error }}</p>
       <p v-if="teamNotice" class="inline-success">{{ teamNotice }}</p>
       <section v-if="ropeTeam" class="rope-team-summary">
         <div><p class="portal-kicker">ROPE PARTY</p><h2>挂绳队伍</h2></div>
-        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ ropeTeam.bossCycleState === 'casting' ? (!member.online ? '离线跳过' : member.bossBuffCompleted ? 'BUFF已完成' : '等待BUFF') : member.isLeader ? (ropeTeam.createdInGame ? '已创建队伍' : '正在建队') : member.joined ? '已进队' : member.invited ? '已发送邀请' : '等待邀请' }}</span><i :class="{ joined: member.bossBuffCompleted || member.joined || (member.isLeader && ropeTeam.createdInGame), invited: member.invited && !member.joined, skipped: ropeTeam.bossCycleState === 'casting' && !member.online }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
-        <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名" :disabled="!ropeTeam.createdInGame || ropeTeam.bossCycleState !== 'idle'"><button :disabled="bossRoleSaving || !ropeTeam.createdInGame || ropeTeam.bossCycleState !== 'idle'" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : ropeTeam.bossCycleState !== 'idle' ? '流程进行中' : '保存老板' }}</button><small>{{ ropeTeam.createdInGame ? bossCycleLabel(ropeTeam) : '等待队长完成建队' }}</small></div>
-        <button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button>
+        <ul><li v-for="member in ropeTeam.members" :key="member.sessionId"><strong>{{ member.roleName }}</strong><span>{{ !member.online ? '离线' : member.buffCompleted ? 'BUFF已完成' : member.joined ? '已进队' : '等待进队' }}</span><i :class="{ joined: member.joined || member.buffCompleted, skipped: !member.online }"></i><button v-if="!member.isLeader" class="team-member-remove" :disabled="removingTeamMemberID !== null" :title="`移除 ${member.roleName}`" @click="removeTeamMember(member)">{{ removingTeamMemberID === member.sessionId ? '移除中…' : '移除' }}</button></li></ul>
+        <div class="rope-boss-config"><input v-model="bossRoleDraft" maxlength="24" placeholder="目标老板角色名"><button :disabled="bossRoleSaving" @click="saveBossRoleName">{{ bossRoleSaving ? '保存中…' : '保存老板' }}</button><small>{{ ropeStateLabel(ropeTeam) }}</small></div>
+        <div class="manage-heading-actions"><button class="team-create-button" :disabled="teamRestarting" @click="restartTeamAndBuff">{{ teamRestarting ? '重新组队中…' : '重新组队放BUFF' }}</button><button class="team-disband-button" :disabled="teamDisbanding" @click="disbandTeam">{{ teamDisbanding ? '解散中…' : '解散队伍' }}</button></div>
       </section>
       <div v-if="clients.length" class="client-grid">
         <article v-for="client in clients" :key="client.id" class="client-card">
@@ -338,9 +346,10 @@ onBeforeUnmount(() => {
       <section v-else class="empty-portal"><span>⌘</span><h2>还没有客户端</h2><p>请先在 AutoBuff 客户端登录当前账号，连接后会自动出现在这里。</p></section>
     </section>
     <dialog ref="teamDialog" class="client-admin-dialog team-dialog">
-      <header><div><p class="portal-kicker">ROPE PARTY</p><h2>{{ ropeTeam ? '修改队伍' : '创建队伍' }}</h2></div><button class="dialog-close" aria-label="关闭" @click="teamDialog?.close()">×</button></header>
+      <header><div><p class="portal-kicker">ROPE PARTY</p><h2>创建队伍</h2></div><button class="dialog-close" aria-label="关闭" @click="teamDialog?.close()">×</button></header>
       <p class="dialog-help">选择 1–5 个已填写角色名称的客户端，并指定一名队长。保存后所有成员会停止当前功能，切换到神殿挂绳组队并重新开始。</p>
       <p v-if="teamError" class="inline-notice">{{ teamError }}</p>
+      <label class="role-name-field"><span>老板角色名</span><input v-model="bossRoleDraft" maxlength="24" placeholder="创建时必须填写"></label>
       <div class="team-member-picker">
         <label v-for="client in eligibleTeamClients" :key="client.id" class="team-member-option" :class="{ selected: selectedTeamMembers.has(client.id) }">
           <input type="checkbox" :checked="selectedTeamMembers.has(client.id)" :disabled="!selectedTeamMembers.has(client.id) && (!client.online || selectedTeamMembers.size >= 5)" @change="toggleTeamMember(client.id, ($event.target as HTMLInputElement).checked)">

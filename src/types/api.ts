@@ -22,8 +22,7 @@ export interface RopeTeamMember {
   name: string
   roleName: string
   isLeader: boolean
-  invited: boolean
-  bossBuffCompleted: boolean
+  buffCompleted: boolean
   joined: boolean
   online: boolean
 }
@@ -31,10 +30,16 @@ export interface RopeTeamMember {
 export interface RopeTeam {
   id: number
   leaderSessionId: string
-  createdInGame: boolean
   bossRoleName: string
-  bossCycleId: number
-  bossCycleState: 'idle' | 'inviting' | 'casting' | 'kicking' | 'disbanding' | 'changing_leader'
+  state: 'setting_up' | 'waiting_members' | 'ready' | 'error'
+  lastError: string
+  cycle?: {
+    id: number
+    state: 'inviting' | 'casting' | 'rebuilding' | 'waiting_members' | 'finished'
+    manual: boolean
+    startedAt: number
+  }
+  updatedAt: number
   members: RopeTeamMember[]
 }
 
