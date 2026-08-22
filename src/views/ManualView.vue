@@ -171,7 +171,7 @@ onMounted(async () => {
             <li><span>2</span><div><strong>创建队伍</strong><p>进入网页“功能中心 → 客户端管理”，点击“创建队伍”，选择 1–5 个有角色名的客户端，并指定队长。</p></div></li>
             <li><span>3</span><div><strong>保存并执行</strong><p>所选客户端会停止原功能，切换到“神殿模式 · 挂绳组队”，开启自动同意组队。队长创建游戏队伍并依次邀请成员。</p></div></li>
             <li><span>4</span><div><strong>确认进队状态</strong><p>网页会显示队长、已进队、等待进队和离线状态。所有成员都显示“已进队”后再设置老板。</p></div></li>
-            <li><span>5</span><div><strong>设置目标老板</strong><p>填写老板角色名并保存。系统等待任一成员 Buff 剩余不超过 10 秒后，由队长开始邀请老板。</p></div></li>
+            <li><span>5</span><div><strong>设置目标老板</strong><p>填写老板角色名并保存。首次固定成员全部进队后会立即邀请老板并释放一轮 Buff；后续任一成员 Buff 剩余不超过 10 秒时再次触发。</p></div></li>
             <li><span>6</span><div><strong>观察协同周期</strong><p>老板进队后全员强制释放已启用 Buff；全部完成后，队长结束本轮并重建原队伍。网页会显示邀请、释放、结束和重建状态。</p></div></li>
           </ol>
           <ul>
