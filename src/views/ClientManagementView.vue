@@ -229,8 +229,11 @@ function ropeStateLabel(team: RopeTeam) {
   if (team.bossRoleName && !leader?.online) return '队长离线，无法邀请老板'
   if (team.lastError) return team.lastError
   if (team.cycle) return {
-    inviting: '正在邀请老板',
-    casting: '全员释放 Buff',
+    pre_rebuilding: '队长正在重新组队',
+    inviting: team.cycle.inviteStatus === 'invitation_sent' ? '已发送老板邀请，持续检测进队' : '正在邀请老板',
+    dispatching_buffs: '正在通知成员释放 Buff',
+    casting: '已确认成员正在释放 Buff',
+    notifying_leader: '释放阶段完成，正在通知队长',
     rebuilding: '正在解散并重建队伍',
     waiting_members: '重建完成，等待成员入队',
     finished: '本轮已完成',

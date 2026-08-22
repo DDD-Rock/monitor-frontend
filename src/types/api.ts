@@ -34,10 +34,11 @@ export interface RopeTeam {
   state: 'setting_up' | 'waiting_members' | 'ready' | 'error'
   lastError: string
   cycle?: {
-    id: number
-    state: 'inviting' | 'casting' | 'rebuilding' | 'waiting_members' | 'finished'
+    id: string
+    state: 'pre_rebuilding' | 'waiting_members' | 'inviting' | 'dispatching_buffs' | 'casting' | 'notifying_leader' | 'rebuilding'
     manual: boolean
     startedAt: number
+    inviteStatus?: string
   }
   updatedAt: number
   members: RopeTeamMember[]
