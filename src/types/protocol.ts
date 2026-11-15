@@ -104,7 +104,7 @@ export interface Snapshot {
   online: boolean
   connected?: boolean
   clientState?: {
-    mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor' | 'emulator'
+    mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor' | 'emulator' | 'taunt'
     running: boolean
   }
   map?: MapPayload

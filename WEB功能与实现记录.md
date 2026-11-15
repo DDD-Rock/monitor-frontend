@@ -194,6 +194,19 @@ WHERE username = 'your_admin_username';
 | `live` | 活花模式 |
 | `follow_heal` | 跟补模式 |
 | `monitor` | 监控模式 |
+| `emulator` | 模拟器模式 |
+| `taunt` | 挑衅模式 |
+
+挑衅模式使用账号模式授权：超级管理员在用户管理的客户端弹窗中勾选“挑衅模式”后保存，
+通过 `PUT /api/admin/users/{id}/authorized-modes` 提交 `taunt`。普通账号默认不授权，
+弹窗只回填服务端返回的已授权模式，不自动选中新增模式。客户端收到授权后才显示入口，
+收回授权会隐藏入口并停止正在运行的挑衅模式；客户端卡片可显示“挑衅模式”。
+超级管理员沿用全部模式可用的规则。
+部署时同时保留线上已有的模拟器授权项、客户端状态协议及已授予权限。
+
+部署前须先为已有数据库执行后端仓库的
+`migrations/taunt_mode_authorization_migration.sql`，再更新后端和网页。
+新建数据库使用更新后的 `monitor_schema.sql`，两种方式的挑衅权限字段默认均为 `0`。
 
 ### 6.3 实时连接
 

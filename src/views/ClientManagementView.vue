@@ -52,6 +52,7 @@ const modeNames: Record<ManagedClient['mode'], string> = {
   follow_heal: '跟补模式',
   monitor: '监控模式',
   emulator: '模拟器模式',
+  taunt: '挑衅模式',
 }
 
 function connect() {

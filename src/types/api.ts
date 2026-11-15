@@ -9,7 +9,7 @@ export interface ManagedClient {
   clientId: string
   name: string
   roleName: string
-  mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor' | 'emulator'
+  mode: 'dead' | 'live' | 'temple' | 'follow_heal' | 'monitor' | 'emulator' | 'taunt'
   running: boolean
   online: boolean
   createdAt: number

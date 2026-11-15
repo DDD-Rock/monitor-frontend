@@ -26,7 +26,9 @@ const kickingClients = ref(false)
 const modeOptions: { value: ManagedClient['mode']; label: string }[] = [
   { value: 'dead', label: '死花模式' }, { value: 'live', label: '活花模式' },
   { value: 'temple', label: '神殿模式' }, { value: 'follow_heal', label: '跟补模式' },
-  { value: 'monitor', label: '监控模式' }, { value: 'emulator', label: '模拟器模式' },
+  { value: 'monitor', label: '监控模式' },
+  { value: 'emulator', label: '模拟器模式' },
+  { value: 'taunt', label: '挑衅模式' },
 ]
 const onlineClients = computed(() => clients.value.filter((client) => client.online))
 const allOnlineSelected = computed(() => onlineClients.value.length > 0 && onlineClients.value.every((client) => selectedClientIDs.value.has(client.id)))
